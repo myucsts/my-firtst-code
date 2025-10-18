@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GitHub Issues ボード</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>GitHub Issues ボード</h1>
+      <p>
+        公開リポジトリの Issue を読み込み、掲示板のように一覧表示します。GitHub Pages
+        など静的ホスティングでそのまま公開できます。
+      </p>
+    </header>
+
+    <main class="page-main">
+      <section class="panel">
+        <h2>リポジトリ設定</h2>
+        <form id="settings-form" class="form-grid">
+          <label>
+            オーナー
+            <input
+              id="owner-input"
+              name="owner"
+              type="text"
+              placeholder="octocat"
+              required
+            />
+          </label>
+          <label>
+            リポジトリ
+            <input
+              id="repo-input"
+              name="repo"
+              type="text"
+              placeholder="Hello-World"
+              required
+            />
+          </label>
+          <label>
+            ステータス
+            <select id="state-select" name="state">
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <label>
+            ラベル (カンマ区切り)
+            <input
+              id="labels-input"
+              name="labels"
+              type="text"
+              placeholder="bug,help wanted"
+            />
+          </label>
+          <label>
+            ソート
+            <select id="sort-select" name="sort">
+              <option value="created">作成日</option>
+              <option value="updated">更新日</option>
+              <option value="comments">コメント数</option>
+            </select>
+          </label>
+          <label>
+            並び順
+            <select id="direction-select" name="direction">
+              <option value="desc">新しい順</option>
+              <option value="asc">古い順</option>
+            </select>
+          </label>
+          <label>
+            表示件数 (1ページあたり / 1-100)
+            <input
+              id="per-page-input"
+              name="perPage"
+              type="number"
+              min="1"
+              max="100"
+              value="20"
+            />
+          </label>
+          <details class="token-details">
+            <summary>アクセストークン (任意)</summary>
+            <p>
+              個人アクセストークンを入力するとレート制限が緩和されます。ブラウザの localStorage
+              に保存されます。
+            </p>
+            <input
+              id="token-input"
+              name="token"
+              type="password"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              autocomplete="off"
+            />
+            <button type="button" id="clear-token-button" class="secondary">
+              トークンを削除
+            </button>
+          </details>
+          <button type="submit" class="primary">Issue を読み込む</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="list-header">
+          <h2>Issue 一覧</h2>
+          <div class="search-box">
+            <label for="search-input" class="sr-only">検索</label>
+            <input
+              id="search-input"
+              type="search"
+              placeholder="タイトル・本文を検索"
+            />
+          </div>
+        </div>
+        <div id="status-message" role="status" aria-live="polite"></div>
+        <ul id="issues-list" class="issues-list"></ul>
+        <div class="actions">
+          <button id="load-more-button" class="primary" hidden>さらに読み込む</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        データは GitHub REST API から取得します。Issue の追加・更新は GitHub から行ってください。
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
