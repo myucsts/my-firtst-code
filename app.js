@@ -141,6 +141,10 @@
     areas: [],
   };
 
+  const SAVE_STATE_DEBOUNCE_MS = 200;
+  let saveStateTimer = null;
+  let isStateDirty = false;
+
   init();
 
   function init() {
@@ -156,6 +160,7 @@
     initConfigEditor();
     renderAreas();
     attachEventHandlers();
+    setupStatePersistenceGuards();
     updateSummary();
   }
 
@@ -224,7 +229,7 @@
     }
     legacySingleAreaItems = null;
     legacySingleAreaName = "";
-    saveState();
+    saveState({ immediate: true });
   }
 
   function createArea(name = "") {
@@ -589,7 +594,30 @@
     return normalizeChecklist(JSON.parse(JSON.stringify(sections)));
   }
 
-  function saveState() {
+  function saveState(options = {}) {
+    isStateDirty = true;
+    const immediate = options.immediate === true;
+    if (immediate) {
+      if (saveStateTimer) {
+        clearTimeout(saveStateTimer);
+        saveStateTimer = null;
+      }
+      writeStateToStorage();
+      return;
+    }
+    if (saveStateTimer) {
+      clearTimeout(saveStateTimer);
+    }
+    saveStateTimer = setTimeout(() => {
+      writeStateToStorage();
+      saveStateTimer = null;
+    }, SAVE_STATE_DEBOUNCE_MS);
+  }
+
+  function writeStateToStorage() {
+    if (!isStateDirty) {
+      return;
+    }
     const payload = {
       form: { ...state.form },
       areas: state.areas.map((area) => ({
@@ -600,6 +628,15 @@
       })),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    isStateDirty = false;
+  }
+
+  function flushPendingStateSave() {
+    if (saveStateTimer) {
+      clearTimeout(saveStateTimer);
+      saveStateTimer = null;
+    }
+    writeStateToStorage();
   }
 
   function initTemplateControls() {
@@ -656,6 +693,16 @@
     if (addAreaButton) {
       addAreaButton.addEventListener("click", handleAddArea);
     }
+  }
+
+  function setupStatePersistenceGuards() {
+    window.addEventListener("beforeunload", flushPendingStateSave);
+    window.addEventListener("pagehide", flushPendingStateSave);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        flushPendingStateSave();
+      }
+    });
   }
 
   function renderAreas() {
@@ -1002,14 +1049,7 @@
       return;
     }
 
-    const counts = STATUS_ORDER.reduce(
-      (acc, key) => ({
-        ...acc,
-        [key]: items.filter((item) => item.status === key).length,
-      }),
-      {}
-    );
-
+    const { counts, areaMap } = summarizeCompletedItems(items);
     const total = items.length;
     const areaNames =
       state.areas.map((area, index) => area.name || `点検箇所${index + 1}`).join("、") ||
@@ -1039,7 +1079,7 @@
 
     const areaSummaries = state.areas
       .map((area, index) => {
-        const areaItems = items.filter((item) => item.areaId === area.id);
+        const areaItems = areaMap.get(area.id) || [];
         if (areaItems.length === 0) {
           return `
             <section class="summary-group area-summary">
@@ -1100,7 +1140,36 @@
       .join("");
 
     summarySection.innerHTML = `${infoBlock}${areaSummaries}`;
-    reportTextArea.value = buildReportText(items);
+    reportTextArea.value = buildReportText(items, areaMap);
+  }
+
+  function summarizeCompletedItems(items) {
+    const counts = STATUS_ORDER.reduce((acc, key) => {
+      acc[key] = 0;
+      return acc;
+    }, {});
+    const areaMap = new Map();
+    items.forEach((item) => {
+      if (!areaMap.has(item.areaId)) {
+        areaMap.set(item.areaId, []);
+      }
+      areaMap.get(item.areaId).push(item);
+      if (Object.prototype.hasOwnProperty.call(counts, item.status)) {
+        counts[item.status] += 1;
+      }
+    });
+    return { counts, areaMap };
+  }
+
+  function groupItemsByArea(items) {
+    const map = new Map();
+    items.forEach((item) => {
+      if (!map.has(item.areaId)) {
+        map.set(item.areaId, []);
+      }
+      map.get(item.areaId).push(item);
+    });
+    return map;
   }
 
   function groupItemsBySection(items) {
@@ -1138,7 +1207,7 @@
       .replace(/'/g, "&#039;");
   }
 
-  function buildReportText(items) {
+  function buildReportText(items, areaMap = null) {
     const lines = [];
     lines.push("以下のとおり施設安全点検を実施しました。");
     lines.push("");
@@ -1153,8 +1222,9 @@
     lines.push("");
     lines.push("■ 点検結果");
 
+    const groupedByArea = areaMap || groupItemsByArea(items);
     state.areas.forEach((area, index) => {
-      const areaItems = items.filter((item) => item.areaId === area.id);
+      const areaItems = groupedByArea.get(area.id) || [];
       lines.push(`【${area.name || `点検箇所${index + 1}`}】`);
       if (area.notes) {
         lines.push(`・箇所メモ: ${area.notes}`);
