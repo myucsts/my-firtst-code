@@ -105,11 +105,8 @@
   const copyReportButton = document.getElementById("copy-report");
   const resetStatusButton = document.getElementById("reset-status");
   const configInput = document.getElementById("config-input");
-  const configFileInput = document.getElementById("config-file-input");
   const applyConfigButton = document.getElementById("apply-config");
   const resetConfigButton = document.getElementById("reset-config");
-  const exportConfigButton = document.getElementById("export-config");
-  const importConfigButton = document.getElementById("import-config");
   const copyConfigButton = document.getElementById("copy-config");
 
   const formFields = {
@@ -321,12 +318,7 @@
     resetStatusButton.addEventListener("click", handleReset);
     applyConfigButton.addEventListener("click", handleApplyConfig);
     resetConfigButton.addEventListener("click", handleResetConfig);
-    exportConfigButton.addEventListener("click", handleExportConfig);
-    importConfigButton.addEventListener("click", handleImportConfig);
     copyConfigButton.addEventListener("click", handleCopyConfig);
-    if (configFileInput) {
-      configFileInput.addEventListener("change", handleConfigFileSelected);
-    }
   }
 
   function renderChecklist() {
@@ -462,55 +454,6 @@
       setStatusMessage("コピーに失敗しました。手動でコピーしてください。", "error");
       fallbackCopy(configInput);
     }
-  }
-
-  function handleExportConfig() {
-    try {
-      const data = stringifyChecklist(checklistSections);
-      const filename = `facility-checklist-config-${formatTimestamp(
-        new Date()
-      )}.json`;
-      downloadTextFile(data, filename, "application/json");
-      setStatusMessage("JSON 設定ファイルをエクスポートしました。", "success");
-    } catch (error) {
-      console.error("Failed to export checklist config", error);
-      setStatusMessage("エクスポートに失敗しました。", "error");
-    }
-  }
-
-  function handleImportConfig() {
-    if (!configFileInput) {
-      setStatusMessage("インポート用のファイル入力が利用できません。", "error");
-      return;
-    }
-    configFileInput.value = "";
-    configFileInput.click();
-  }
-
-  function handleConfigFileSelected(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result || "");
-        const parsed = parseChecklistConfig(text);
-        applyChecklistConfiguration(parsed, { persist: true });
-        setStatusMessage("JSON 設定ファイルをインポートしました。", "success");
-      } catch (error) {
-        console.error("Failed to import checklist config", error);
-        setStatusMessage(error.message || "インポートに失敗しました。", "error");
-      } finally {
-        event.target.value = "";
-      }
-    };
-    reader.onerror = () => {
-      console.error("Failed to read checklist config file", reader.error);
-      setStatusMessage("ファイルの読み込みに失敗しました。", "error");
-      event.target.value = "";
-    };
-    reader.readAsText(file, "utf-8");
   }
 
   function highlightActiveStatus(container, activeStatus) {
@@ -721,31 +664,6 @@
 
     lines.push("以上、確認をお願いいたします。");
     return lines.join("\n");
-  }
-
-  function formatTimestamp(date) {
-    const pad = (value) => String(value).padStart(2, "0");
-    return (
-      date.getFullYear().toString() +
-      pad(date.getMonth() + 1) +
-      pad(date.getDate()) +
-      "-" +
-      pad(date.getHours()) +
-      pad(date.getMinutes()) +
-      pad(date.getSeconds())
-    );
-  }
-
-  function downloadTextFile(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   }
 
   function fallbackCopy(textarea) {
