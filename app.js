@@ -1,357 +1,487 @@
 (() => {
-  const form = document.getElementById("settings-form");
-  const ownerInput = document.getElementById("owner-input");
-  const repoInput = document.getElementById("repo-input");
-  const stateSelect = document.getElementById("state-select");
-  const labelsInput = document.getElementById("labels-input");
-  const sortSelect = document.getElementById("sort-select");
-  const directionSelect = document.getElementById("direction-select");
-  const perPageInput = document.getElementById("per-page-input");
-  const tokenInput = document.getElementById("token-input");
-  const clearTokenButton = document.getElementById("clear-token-button");
-  const issuesList = document.getElementById("issues-list");
-  const loadMoreButton = document.getElementById("load-more-button");
+  const STORAGE_KEY = "facility-safety-checklist:v1";
+  const STATUS_LABELS = {
+    ok: "適合",
+    attention: "注意",
+    issue: "不適合",
+  };
+  const STATUS_ORDER = ["ok", "attention", "issue"];
+
+  const CHECKLIST_SECTIONS = [
+    {
+      id: "entrance",
+      title: "出入口・共用部",
+      items: [
+        {
+          id: "entrance-doors",
+          title: "出入口の施錠・開閉装置は正常に作動する",
+          notePlaceholder: "異音・鍵の固さなど気づいた点を記録",
+        },
+        {
+          id: "entrance-pathways",
+          title: "通路や避難経路に障害物がない",
+          notePlaceholder: "一時的な設置物がある場合は詳細に記載",
+        },
+        {
+          id: "entrance-lighting",
+          title: "共用部の照明は適切に点灯する",
+          notePlaceholder: "交換予定の照明があれば記載",
+        },
+      ],
+    },
+    {
+      id: "equipment",
+      title: "設備・機器",
+      items: [
+        {
+          id: "equipment-machinery",
+          title: "主要設備が取扱手順どおりに運転・停止できる",
+          notePlaceholder: "異常音/振動など",
+        },
+        {
+          id: "equipment-emergency",
+          title: "非常停止ボタン・ブレーカーへのアクセスが確保されている",
+          notePlaceholder: "遮蔽物の有無を記録",
+        },
+        {
+          id: "equipment-maintenance",
+          title: "点検記録・保守点検シールが最新である",
+          notePlaceholder: "期限切れのものを記載",
+        },
+      ],
+    },
+    {
+      id: "safety",
+      title: "防災・安全備品",
+      items: [
+        {
+          id: "safety-extinguisher",
+          title: "消火器・消火栓の設置位置と有効期限を確認した",
+          notePlaceholder: "交換予定・不備があれば記載",
+        },
+        {
+          id: "safety-emergency-exit",
+          title: "避難誘導灯・非常口標識が点灯し視認できる",
+          notePlaceholder: "不点灯箇所や暗い箇所を記録",
+        },
+        {
+          id: "safety-firstaid",
+          title: "救急箱の備品が揃っている",
+          notePlaceholder: "不足している備品を記録",
+        },
+      ],
+    },
+    {
+      id: "environment",
+      title: "環境・衛生",
+      items: [
+        {
+          id: "environment-cleanliness",
+          title: "作業エリア・床の清掃が行き届いている",
+          notePlaceholder: "油漏れ・濡れなど滑りやすい箇所の有無",
+        },
+        {
+          id: "environment-waste",
+          title: "廃棄物・資材が適切に区分・保管されている",
+          notePlaceholder: "一時保管物や改善予定を記録",
+        },
+        {
+          id: "environment-ppe",
+          title: "必要な保護具が劣化なく配置されている",
+          notePlaceholder: "交換必要な保護具を記録",
+        },
+      ],
+    },
+  ];
+
+  const form = document.getElementById("inspection-form");
+  const checklistContainer = document.getElementById("checklist-container");
+  const summarySection = document.getElementById("summary");
   const statusMessage = document.getElementById("status-message");
-  const searchInput = document.getElementById("search-input");
 
-  const storageKey = "gh-issues-board-settings";
-  const tokenStorageKey = "gh-issues-board-token";
+  const refreshSummaryButton = document.getElementById("refresh-summary");
+  const composeEmailButton = document.getElementById("compose-email");
+  const resetStatusButton = document.getElementById("reset-status");
 
-  let currentPage = 1;
-  let hasMore = false;
-  let activeRequest = null;
-  let lastParamsHash = "";
-  let issuesCache = [];
+  const formFields = {
+    facilityName: document.getElementById("facility-name"),
+    facilityLocation: document.getElementById("facility-location"),
+    inspectionDate: document.getElementById("inspection-date"),
+    inspectorName: document.getElementById("inspector-name"),
+    recipientEmail: document.getElementById("recipient-email"),
+    globalNotes: document.getElementById("global-notes"),
+  };
+
+  let state = {
+    form: {
+      facilityName: "",
+      facilityLocation: "",
+      inspectionDate: "",
+      inspectorName: "",
+      recipientEmail: "",
+      globalNotes: "",
+    },
+    items: {},
+  };
 
   init();
 
   function init() {
-    restoreSettings();
-    form.addEventListener("submit", handleSubmit);
-    loadMoreButton.addEventListener("click", () => loadIssues({ reset: false }));
-    clearTokenButton.addEventListener("click", clearToken);
-    searchInput.addEventListener("input", debounce(renderIssues, 200));
+    loadState();
+    initForm();
+    renderChecklist();
+    attachEventHandlers();
+    updateSummary();
   }
 
-  function restoreSettings() {
+  function loadState() {
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      ownerInput.value = saved.owner || "vercel";
-      repoInput.value = saved.repo || "next.js";
-      stateSelect.value = saved.state || "open";
-      labelsInput.value = saved.labels || "";
-      sortSelect.value = saved.sort || "created";
-      directionSelect.value = saved.direction || "desc";
-      perPageInput.value = saved.perPage || 20;
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      if (saved.form && saved.items) {
+        state = {
+          form: { ...state.form, ...saved.form },
+          items: { ...saved.items },
+        };
+      }
     } catch {
-      // ignore malformed data
-    }
-
-    const savedToken = localStorage.getItem(tokenStorageKey);
-    if (savedToken) {
-      tokenInput.value = savedToken;
+      state = { ...state };
     }
   }
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    const params = getFormParams();
-    persistSettings(params);
-    if (tokenInput.value.trim()) {
-      localStorage.setItem(tokenStorageKey, tokenInput.value.trim());
-    }
-    loadIssues({ reset: true });
+  function saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  function getFormParams() {
-    return {
-      owner: ownerInput.value.trim(),
-      repo: repoInput.value.trim(),
-      state: stateSelect.value,
-      labels: labelsInput.value
-        .split(",")
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .join(","),
-      sort: sortSelect.value,
-      direction: directionSelect.value,
-      perPage: Math.min(
-        100,
-        Math.max(1, Number.parseInt(perPageInput.value, 10) || 20)
-      ),
-    };
-  }
-
-  function persistSettings(params) {
-    localStorage.setItem(storageKey, JSON.stringify(params));
-  }
-
-  function clearToken() {
-    localStorage.removeItem(tokenStorageKey);
-    tokenInput.value = "";
-    tokenInput.focus();
-  }
-
-  async function loadIssues({ reset }) {
-    const params = getFormParams();
-    if (!params.owner || !params.repo) {
-      setStatus("オーナーとリポジトリを入力してください。", "error");
-      return;
-    }
-
-    const paramsHash = JSON.stringify(params);
-    if (reset || paramsHash !== lastParamsHash) {
-      currentPage = 1;
-      issuesCache = [];
-      issuesList.innerHTML = "";
-      lastParamsHash = paramsHash;
-    }
-
-    await fetchIssuesPage(params);
-  }
-
-  async function fetchIssuesPage(params) {
-    if (activeRequest) {
-      activeRequest.abort();
-    }
-
-    const controller = new AbortController();
-    activeRequest = controller;
-    setStatus("読み込み中...", "info");
-    toggleFormDisabled(true);
-    loadMoreButton.hidden = true;
-
-    try {
-      const url = new URL(
-        `https://api.github.com/repos/${encodeURIComponent(
-          params.owner
-        )}/${encodeURIComponent(params.repo)}/issues`
-      );
-
-      url.searchParams.set("state", params.state);
-      if (params.labels) {
-        url.searchParams.set("labels", params.labels);
+  function initForm() {
+    Object.entries(formFields).forEach(([key, element]) => {
+      if (state.form[key]) {
+        element.value = state.form[key];
       }
-      url.searchParams.set("sort", params.sort);
-      url.searchParams.set("direction", params.direction);
-      url.searchParams.set("per_page", params.perPage.toString());
-      url.searchParams.set("page", currentPage.toString());
-
-      const headers = {
-        Accept: "application/vnd.github+json",
-      };
-
-      const token = tokenInput.value.trim() || localStorage.getItem(tokenStorageKey);
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const response = await fetch(url.toString(), {
-        signal: controller.signal,
-        headers,
+      element.addEventListener("input", () => {
+        state.form[key] = element.value;
+        saveState();
+        updateSummary();
       });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-        return;
-      }
-
-      const issues = (await response.json()).filter(
-        (issue) => !issue.pull_request
-      );
-
-      const linkHeader = response.headers.get("link");
-      hasMore = Boolean(linkHeader && linkHeader.includes('rel="next"'));
-
-      issuesCache.push(...issues);
-      renderIssues();
-
-      if (issues.length === 0 && currentPage === 1) {
-        setStatus("Issue が見つかりませんでした。", "info");
-      } else {
-        const totalShown = issuesCache.length;
-        setStatus(`表示中: ${totalShown.toLocaleString()} 件`, "success");
-      }
-
-      if (hasMore) {
-        currentPage += 1;
-        loadMoreButton.hidden = false;
-      } else {
-        loadMoreButton.hidden = true;
-      }
-    } catch (error) {
-      if (error.name === "AbortError") {
-        return;
-      }
-      console.error(error);
-      setStatus("Issue の取得でエラーが発生しました。ネットワーク状態をご確認ください。", "error");
-    } finally {
-      toggleFormDisabled(false);
-      activeRequest = null;
-    }
-  }
-
-  async function handleFetchError(response) {
-    let message = `Issue の取得に失敗しました (HTTP ${response.status}).`;
-
-    switch (response.status) {
-      case 401:
-        message = "認証に失敗しました。アクセストークンを確認してください。";
-        break;
-      case 403:
-        const remaining = response.headers.get("x-ratelimit-remaining");
-        if (remaining === "0") {
-          const reset = response.headers.get("x-ratelimit-reset");
-          if (reset) {
-            const resetDate = new Date(Number.parseInt(reset, 10) * 1000);
-            message = `GitHub API のレート制限に達しました。${resetDate.toLocaleString()} 以降に再試行してください。アクセストークンを利用すると制限が緩和されます。`;
-          } else {
-            message =
-              "GitHub API のレート制限に達しました。少し待ってから再試行するかアクセストークンを入力してください。";
-          }
-        } else {
-          message =
-            "GitHub API から拒否されました。アクセストークンやリクエスト内容を確認してください。";
-        }
-        break;
-      case 404:
-        message = "リポジトリが見つかりませんでした。オーナーとリポジトリ名を確認してください。";
-        break;
-      default:
-        try {
-          const body = await response.json();
-          if (body && body.message) {
-            message = `GitHub API エラー: ${body.message}`;
-          }
-        } catch {
-          // ignore
-        }
-    }
-
-    setStatus(message, "error");
-  }
-
-  function renderIssues() {
-    issuesList.innerHTML = "";
-    const keyword = searchInput.value.trim().toLowerCase();
-    const filtered = keyword
-      ? issuesCache.filter((issue) =>
-          [issue.title, issue.body || ""].some((field) =>
-            field.toLowerCase().includes(keyword)
-          )
-        )
-      : issuesCache;
-
-    if (filtered.length === 0) {
-      const emptyMessage = document.createElement("li");
-      emptyMessage.textContent = keyword
-        ? "検索条件に一致する Issue がありません。"
-        : "Issue がまだ読み込まれていません。";
-      issuesList.appendChild(emptyMessage);
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    filtered.forEach((issue) => {
-      fragment.appendChild(createIssueCard(issue));
     });
-    issuesList.appendChild(fragment);
+
+    if (!state.form.inspectionDate) {
+      const today = new Date().toISOString().slice(0, 10);
+      formFields.inspectionDate.value = today;
+      state.form.inspectionDate = today;
+      saveState();
+    }
   }
 
-  function createIssueCard(issue) {
-    const li = document.createElement("li");
-    li.className = "issue-card";
+  function attachEventHandlers() {
+    refreshSummaryButton.addEventListener("click", () => {
+      updateSummary();
+      setStatusMessage("要約を更新しました。", "info");
+    });
 
-    const title = document.createElement("h3");
-    title.className = "issue-title";
-    const link = document.createElement("a");
-    link.href = issue.html_url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = `#${issue.number} ${issue.title}`;
-    title.appendChild(link);
+    composeEmailButton.addEventListener("click", handleComposeEmail);
+    resetStatusButton.addEventListener("click", handleReset);
+  }
 
-    const status = document.createElement("span");
-    status.className = `status-pill ${
-      issue.state === "open" ? "status-open" : "status-closed"
-    }`;
-    status.textContent = issue.state;
-    title.appendChild(status);
+  function renderChecklist() {
+    checklistContainer.innerHTML = "";
 
-    li.appendChild(title);
+    CHECKLIST_SECTIONS.forEach((section) => {
+      const sectionEl = document.createElement("section");
+      sectionEl.className = "checklist-group";
 
-    const meta = document.createElement("div");
-    meta.className = "issue-meta";
-    meta.innerHTML = `
-      作成: ${formatDate(issue.created_at)}
-      ${issue.state === "open" ? "" : ` / クローズ: ${formatDate(issue.closed_at) || "-"}`}
-      / 更新: ${formatDate(issue.updated_at)}
-      / コメント: ${issue.comments.toLocaleString()} 件
-    `;
-    li.appendChild(meta);
+      const heading = document.createElement("h3");
+      heading.textContent = section.title;
+      sectionEl.appendChild(heading);
 
-    if (issue.labels && issue.labels.length > 0) {
-      const labels = document.createElement("div");
-      labels.className = "issue-labels";
-      issue.labels.forEach((label) => {
-        const span = document.createElement("span");
-        span.className = "issue-label";
-        span.textContent = label.name;
-        if (label.color) {
-          span.style.backgroundColor = `#${label.color}`;
-          span.style.color = getContrastColor(label.color);
-        }
-        labels.appendChild(span);
+      section.items.forEach((item) => {
+        const itemState = state.items[item.id] || {
+          status: "",
+          note: "",
+        };
+
+        const itemEl = document.createElement("article");
+        itemEl.className = "checklist-item";
+        itemEl.dataset.itemId = item.id;
+
+        const header = document.createElement("div");
+        header.className = "item-header";
+
+        const title = document.createElement("h4");
+        title.className = "item-title";
+        title.textContent = item.title;
+        header.appendChild(title);
+
+        const statusContainer = document.createElement("div");
+        statusContainer.className = "status-options";
+
+        STATUS_ORDER.forEach((statusKey) => {
+          const label = document.createElement("label");
+          label.dataset.status = statusKey;
+
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = `status-${item.id}`;
+          input.value = statusKey;
+          input.checked = itemState.status === statusKey;
+
+          input.addEventListener("change", () => {
+            updateItemState(item.id, { status: input.value });
+            highlightActiveStatus(statusContainer, input.value);
+          });
+
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(STATUS_LABELS[statusKey]));
+          if (itemState.status === statusKey) {
+            label.classList.add("is-active");
+          }
+          statusContainer.appendChild(label);
+        });
+
+        header.appendChild(statusContainer);
+        itemEl.appendChild(header);
+
+        const note = document.createElement("textarea");
+        note.className = "note-input";
+        note.placeholder = item.notePlaceholder || "気づいた点を記入";
+        note.value = itemState.note || "";
+        note.addEventListener("input", () => {
+          updateItemState(item.id, { note: note.value });
+        });
+
+        itemEl.appendChild(note);
+        sectionEl.appendChild(itemEl);
       });
-      li.appendChild(labels);
+
+      checklistContainer.appendChild(sectionEl);
+    });
+  }
+
+  function updateItemState(itemId, partial) {
+    const current = state.items[itemId] || { status: "", note: "" };
+    state.items[itemId] = { ...current, ...partial };
+    saveState();
+    updateSummary();
+  }
+
+  function handleReset() {
+    const confirmed = window.confirm("チェック項目の入力をすべてリセットしますか？");
+    if (!confirmed) return;
+    state.items = {};
+    saveState();
+    renderChecklist();
+    updateSummary();
+    setStatusMessage("チェック項目をリセットしました。", "info");
+  }
+
+  function highlightActiveStatus(container, activeStatus) {
+    Array.from(container.querySelectorAll("label")).forEach((label) => {
+      label.classList.toggle("is-active", label.dataset.status === activeStatus);
+    });
+  }
+
+  function handleComposeEmail() {
+    if (!form.reportValidity()) {
+      setStatusMessage("必須項目を入力してください。", "error");
+      return;
     }
 
-    if (issue.body) {
-      const body = document.createElement("div");
-      body.className = "issue-body";
-      body.textContent = issue.body;
-      li.appendChild(body);
+    const { recipientEmail } = state.form;
+    if (!recipientEmail || !validateEmail(recipientEmail)) {
+      setStatusMessage("担当者メールアドレスの形式を確認してください。", "error");
+      formFields.recipientEmail.focus();
+      return;
     }
 
-    return li;
+    const items = getCompletedItems();
+    if (items.length === 0) {
+      setStatusMessage("チェック項目にステータスを入力してください。", "error");
+      return;
+    }
+
+    updateSummary();
+
+    const subject = buildEmailSubject();
+    const body = buildEmailBody(items);
+    const mailto = `mailto:${encodeURIComponent(
+      recipientEmail
+    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
+    setStatusMessage("メール作成ウィンドウを開きます。", "success");
+  }
+
+  function validateEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  function getCompletedItems() {
+    return CHECKLIST_SECTIONS.flatMap((section) =>
+      section.items
+        .map((item) => {
+          const itemState = state.items[item.id];
+          if (!itemState || !itemState.status) return null;
+          return {
+            section: section.title,
+            id: item.id,
+            title: item.title,
+            status: itemState.status,
+            note: itemState.note,
+          };
+        })
+        .filter(Boolean)
+    );
+  }
+
+  function updateSummary() {
+    const items = getCompletedItems();
+    if (items.length === 0) {
+      summarySection.innerHTML =
+        '<div class="empty-state">チェック内容を入力すると要約が表示されます。</div>';
+      return;
+    }
+
+    const counts = STATUS_ORDER.reduce(
+      (acc, key) => ({
+        ...acc,
+        [key]: items.filter((item) => item.status === key).length,
+      }),
+      {}
+    );
+
+    const total = items.length;
+    const infoBlock = `
+      <div>
+        <h3>${state.form.facilityName || "施設名未入力"} の点検結果</h3>
+        <p>
+          点検日: ${formatDate(state.form.inspectionDate)} /
+          点検者: ${state.form.inspectorName || "未入力"} /
+          記録件数: ${total} 件
+        </p>
+        <p>
+          適合: ${counts.ok ?? 0} 件 /
+          注意: ${counts.attention ?? 0} 件 /
+          不適合: ${counts.issue ?? 0} 件
+        </p>
+        ${
+          state.form.globalNotes
+            ? `<p>特記事項: ${escapeHtml(state.form.globalNotes)}</p>`
+            : ""
+        }
+      </div>
+    `;
+
+    const grouped = groupItemsBySection(items);
+    const listMarkup = grouped
+      .map((group) => {
+        const itemsMarkup = group.items
+          .map((item) => {
+            const badgeClass = `status-badge status-${item.status}`;
+            const noteMarkup = item.note
+              ? `<p>${escapeHtml(item.note)}</p>`
+              : "";
+            return `
+              <article class="summary-item">
+                <div class="summary-item-header">
+                  <h4>${item.title}</h4>
+                  <span class="${badgeClass}">${STATUS_LABELS[item.status]}</span>
+                </div>
+                ${noteMarkup}
+              </article>
+            `;
+          })
+          .join("");
+        return `
+          <section class="summary-group">
+            <h3>${group.section}</h3>
+            <div class="summary-list">
+              ${itemsMarkup}
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    summarySection.innerHTML = `${infoBlock}${listMarkup}`;
+  }
+
+  function groupItemsBySection(items) {
+    const map = new Map();
+    items.forEach((item) => {
+      if (!map.has(item.section)) {
+        map.set(item.section, []);
+      }
+      map.get(item.section).push(item);
+    });
+
+    return Array.from(map.entries()).map(([section, sectionItems]) => ({
+      section,
+      items: sectionItems,
+    }));
   }
 
   function formatDate(value) {
-    if (!value) return "";
+    if (!value) return "未入力";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleString();
+    if (Number.isNaN(date.getTime())) return value;
+    return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}月${String(date.getDate()).padStart(2, "0")}日`;
   }
 
-  function getContrastColor(hexColor) {
-    const hex = hexColor.replace("#", "");
-    if (hex.length !== 6) {
-      return "#1f2933";
+  function escapeHtml(value) {
+    const safe = value ?? "";
+    return String(safe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function buildEmailSubject() {
+    const facility = state.form.facilityName || "施設名未入力";
+    const date = formatDate(state.form.inspectionDate);
+    return `施設安全点検結果 ${facility} (${date})`;
+  }
+
+  // Assemble a plain text summary that is easy to copy into email clients.
+  function buildEmailBody(items) {
+    const lines = [];
+    lines.push("以下のとおり施設安全点検を実施しました。");
+    lines.push("");
+    lines.push(`施設名: ${state.form.facilityName || "未入力"}`);
+    lines.push(`所在地: ${state.form.facilityLocation || "未入力"}`);
+    lines.push(`点検日: ${formatDate(state.form.inspectionDate)}`);
+    lines.push(`点検者: ${state.form.inspectorName || "未入力"}`);
+    lines.push("");
+    lines.push("■ 点検結果");
+
+    const grouped = groupItemsBySection(items);
+    grouped.forEach((group) => {
+      lines.push(`【${group.section}】`);
+      group.items.forEach((item) => {
+        lines.push(
+          `- ${item.title}: ${STATUS_LABELS[item.status]}${
+            item.note ? ` / 備考: ${item.note}` : ""
+          }`
+        );
+      });
+      lines.push("");
+    });
+
+    if (state.form.globalNotes) {
+      lines.push("■ 特記事項");
+      lines.push(state.form.globalNotes);
+      lines.push("");
     }
-    const r = Number.parseInt(hex.slice(0, 2), 16);
-    const g = Number.parseInt(hex.slice(2, 4), 16);
-    const b = Number.parseInt(hex.slice(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.6 ? "#1f2933" : "#f8fafc";
+
+    lines.push("以上、確認をお願いいたします。");
+    return lines.join("\n");
   }
 
-  function setStatus(message, level) {
+  function setStatusMessage(message, level) {
     statusMessage.textContent = message;
     statusMessage.dataset.level = level;
-  }
-
-  function toggleFormDisabled(disabled) {
-    Array.from(form.elements).forEach((element) => {
-      element.disabled = disabled && element !== tokenInput;
-    });
-    loadMoreButton.disabled = disabled;
-  }
-
-  function debounce(fn, delay) {
-    let timer;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn.apply(null, args), delay);
-    };
   }
 })();
