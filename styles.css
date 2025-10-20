@@ -4,17 +4,6 @@
 
 html,
 body {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  background: #f4f6f8;
-  color: #1f2933;
-  line-height: 1.55;
-}
-
-html,
-body {
   height: 100%;
 }
 
@@ -22,6 +11,13 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  background: #f4f6f8;
+  color: #1f2933;
+  line-height: 1.55;
 }
 
 a {
@@ -56,23 +52,16 @@ textarea {
   margin: 0 auto;
   padding: clamp(1rem, 2vw + 0.5rem, 2.5rem);
   width: 100%;
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: minmax(0, 1fr);
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   overflow: hidden;
 }
 
 .layout-column {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  min-height: 0;
-}
-
-.layout-left {
-  display: grid;
-  grid-template-rows: auto 1fr;
   gap: 1rem;
   min-height: 0;
 }
@@ -90,49 +79,82 @@ textarea {
   min-height: 0;
 }
 
-.layout-left .panel:nth-child(2),
-.layout-right .panel {
+.checklist-panel,
+.result-panel {
   overflow: auto;
-}
-
-.layout-left .panel:first-child {
-  overflow: visible;
-}
-
-.layout-right .panel {
   display: flex;
   flex-direction: column;
 }
 
-.layout-right .panel > .actions {
+.info-panel {
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+.result-panel > .actions {
   flex-shrink: 0;
 }
 
-.layout-right .panel > #status-message,
-.layout-right .panel > .summary,
-.layout-right .panel > .report-preview-label,
-.layout-right .panel > .report-text,
-.layout-right .panel > .report-text-help {
+.result-panel > #status-message,
+.result-panel > .summary,
+.result-panel > .report-preview-label,
+.result-panel > .report-text,
+.result-panel > .report-text-help {
   flex-shrink: 0;
 }
 
-.layout-right .panel > .summary {
+.result-panel > .summary {
   flex-grow: 1;
   overflow: auto;
 }
 
-.layout-right .panel > .report-text {
+.result-panel > .report-text {
   flex-grow: 0;
+}
+
+.checklist-panel > .list-header {
+  flex-shrink: 0;
+}
+
+.checklist-panel > .config-details {
+  flex-shrink: 0;
+}
+
+.checklist-panel > #checklist-container {
+  margin-top: 0.75rem;
+  flex: 1;
+  overflow: auto;
 }
 
 @media (min-width: 1024px) {
   .page-main {
-    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
     align-items: stretch;
+    flex-direction: row;
   }
 
   .layout-column {
     height: 100%;
+    flex: 1;
+  }
+
+  .layout-left {
+    max-width: 420px;
+    flex: 0 0 420px;
+  }
+
+  .layout-right {
+    flex: 1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .page-main {
+    overflow: auto;
+  }
+
+  .checklist-panel,
+  .result-panel {
+    max-height: none;
   }
 }
 
@@ -488,6 +510,7 @@ textarea {
   background: #fff;
   resize: vertical;
   min-height: 10rem;
+  max-height: 16rem;
 }
 
 .report-text:focus {
