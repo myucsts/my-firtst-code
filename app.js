@@ -1,6 +1,9 @@
 (() => {
   const STORAGE_KEY = "facility-safety-checklist:v1";
   const CONFIG_STORAGE_KEY = "facility-safety-checklist:config";
+  const TEMPLATE_STORAGE_KEY = "facility-safety-checklist:templates";
+  const CURRENT_TEMPLATE_KEY = "facility-safety-checklist:current-template";
+  const DEFAULT_TEMPLATE_NAME = "標準テンプレート";
   const STATUS_LABELS = {
     ok: "適合",
     attention: "注意",
@@ -105,6 +108,10 @@
   const copyReportButton = document.getElementById("copy-report");
   const resetStatusButton = document.getElementById("reset-status");
   const configInput = document.getElementById("config-input");
+  const templateSelect = document.getElementById("config-template-select");
+  const saveTemplateButton = document.getElementById("save-template");
+  const saveTemplateAsButton = document.getElementById("save-template-as");
+  const deleteTemplateButton = document.getElementById("delete-template");
   const applyConfigButton = document.getElementById("apply-config");
   const resetConfigButton = document.getElementById("reset-config");
   const copyConfigButton = document.getElementById("copy-config");
@@ -118,6 +125,9 @@
   };
 
   let checklistSections = [];
+  let templates = [];
+  let currentTemplateName = DEFAULT_TEMPLATE_NAME;
+
   let state = {
     form: {
       facilityName: "",
@@ -132,10 +142,14 @@
   init();
 
   function init() {
+    templates = loadTemplates();
+    currentTemplateName = loadCurrentTemplateName(templates);
+    saveCurrentTemplateName(currentTemplateName);
     checklistSections = loadChecklistConfig();
     loadState();
     pruneStateItems();
     initForm();
+    initTemplateControls();
     initConfigEditor();
     renderChecklist();
     attachEventHandlers();
@@ -165,12 +179,25 @@
     } catch (error) {
       console.error("Failed to load checklist config", error);
     }
+
+    const template = findTemplate(currentTemplateName) ||
+      findTemplate(DEFAULT_TEMPLATE_NAME);
+    if (template) {
+      return cloneChecklist(template.sections);
+    }
     return cloneChecklist(DEFAULT_CHECKLIST_SECTIONS);
   }
 
   function initConfigEditor() {
     if (!configInput) return;
     configInput.value = stringifyChecklist(checklistSections);
+  }
+
+  function initTemplateControls() {
+    if (!templateSelect) return;
+    renderTemplateOptions();
+    templateSelect.value = currentTemplateName;
+    updateTemplateActionStates();
   }
 
   function stringifyChecklist(sections) {
@@ -255,6 +282,247 @@
     });
   }
 
+  function loadTemplates() {
+    let stored = [];
+    try {
+      stored = JSON.parse(localStorage.getItem(TEMPLATE_STORAGE_KEY) || "[]");
+    } catch (error) {
+      console.error("Failed to load templates", error);
+    }
+
+    const result = [];
+    const names = new Set();
+
+    (Array.isArray(stored) ? stored : []).forEach((entry, index) => {
+      try {
+        if (!entry || typeof entry !== "object") {
+          throw new Error(`テンプレート ${index + 1} の形式が正しくありません。`);
+        }
+        const name = String(entry.name || "").trim();
+        if (!name) {
+          throw new Error(`テンプレート ${index + 1} に名前を設定してください。`);
+        }
+        if (names.has(name)) {
+          throw new Error(`テンプレート名 "${name}" が重複しています。`);
+        }
+        const sections = normalizeChecklist(entry.sections);
+        result.push({ name, sections });
+        names.add(name);
+      } catch (error) {
+        console.warn("Skipping invalid template", error);
+      }
+    });
+
+    if (!names.has(DEFAULT_TEMPLATE_NAME)) {
+      result.push({
+        name: DEFAULT_TEMPLATE_NAME,
+        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
+      });
+      names.add(DEFAULT_TEMPLATE_NAME);
+    }
+
+    if (result.length === 0) {
+      result.push({
+        name: DEFAULT_TEMPLATE_NAME,
+        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
+      });
+    }
+
+    saveTemplates(result);
+    return result;
+  }
+
+  function saveTemplates(list) {
+    const payload = list.map((template) => ({
+      name: template.name,
+      sections: template.sections,
+    }));
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  function findTemplate(name) {
+    return templates.find((template) => template.name === name);
+  }
+
+  function loadCurrentTemplateName(list) {
+    const storedName = localStorage.getItem(CURRENT_TEMPLATE_KEY);
+    if (storedName && list.some((template) => template.name === storedName)) {
+      return storedName;
+    }
+    return DEFAULT_TEMPLATE_NAME;
+  }
+
+  function saveCurrentTemplateName(name) {
+    localStorage.setItem(CURRENT_TEMPLATE_KEY, name);
+  }
+
+  function renderTemplateOptions() {
+    if (!templateSelect) return;
+    templateSelect.innerHTML = "";
+    templates.forEach((template) => {
+      const option = document.createElement("option");
+      option.value = template.name;
+      option.textContent = template.name;
+      templateSelect.appendChild(option);
+    });
+  }
+
+  function updateTemplateActionStates() {
+    if (deleteTemplateButton) {
+      const isDefault = currentTemplateName === DEFAULT_TEMPLATE_NAME;
+      deleteTemplateButton.disabled = isDefault || templates.length <= 1;
+    }
+  }
+
+  function selectTemplate(name, { silent } = { silent: false }) {
+    const template = findTemplate(name);
+    if (!template) return;
+    currentTemplateName = template.name;
+    saveCurrentTemplateName(currentTemplateName);
+    applyChecklistConfiguration(cloneChecklist(template.sections), {
+      persist: true,
+    });
+    if (templateSelect) {
+      templateSelect.value = currentTemplateName;
+    }
+    updateTemplateActionStates();
+    if (!silent) {
+      setStatusMessage(`テンプレート「${currentTemplateName}」を読み込みました。`, "info");
+    }
+  }
+
+  function hasUnsavedConfigChanges() {
+    if (!configInput) return false;
+    return configInput.value !== stringifyChecklist(checklistSections);
+  }
+
+  function handleTemplateChange(event) {
+    const targetName = event.target.value;
+    if (targetName === currentTemplateName) {
+      return;
+    }
+
+    if (hasUnsavedConfigChanges()) {
+      const confirmed = window.confirm(
+        "現在の設定は保存されていません。テンプレートを切り替えると破棄されます。よろしいですか？"
+      );
+      if (!confirmed) {
+        event.target.value = currentTemplateName;
+        return;
+      }
+    }
+
+    selectTemplate(targetName);
+  }
+
+  function parseConfigInput() {
+    const raw = (configInput?.value || "").trim();
+    if (!raw) {
+      throw new Error("設定内容を入力してください。");
+    }
+    return parseChecklistConfig(raw);
+  }
+
+  function handleSaveTemplate() {
+    try {
+      const parsed = parseConfigInput();
+      applyChecklistConfiguration(parsed, { persist: true });
+      const template = findTemplate(currentTemplateName);
+      if (template) {
+        template.sections = cloneChecklist(parsed);
+      }
+      saveTemplates(templates);
+      renderTemplateOptions();
+      if (templateSelect) {
+        templateSelect.value = currentTemplateName;
+      }
+      updateTemplateActionStates();
+      setStatusMessage("テンプレートを上書き保存しました。", "success");
+    } catch (error) {
+      console.error("Failed to save template", error);
+      setStatusMessage(error.message || "テンプレートの保存に失敗しました。", "error");
+    }
+  }
+
+  function handleSaveTemplateAs() {
+    try {
+      const parsed = parseConfigInput();
+      applyChecklistConfiguration(parsed, { persist: true });
+      const defaultName = `${currentTemplateName}のコピー`;
+      const name = promptForTemplateName(defaultName);
+      if (!name) {
+        return;
+      }
+      templates.push({ name, sections: cloneChecklist(parsed) });
+      saveTemplates(templates);
+      currentTemplateName = name;
+      saveCurrentTemplateName(currentTemplateName);
+      renderTemplateOptions();
+      if (templateSelect) {
+        templateSelect.value = currentTemplateName;
+      }
+      updateTemplateActionStates();
+      setStatusMessage(`テンプレート「${currentTemplateName}」を作成しました。`, "success");
+    } catch (error) {
+      console.error("Failed to save template as new", error);
+      setStatusMessage(error.message || "テンプレートの保存に失敗しました。", "error");
+    }
+  }
+
+  function handleDeleteTemplate() {
+    if (currentTemplateName === DEFAULT_TEMPLATE_NAME) {
+      setStatusMessage("標準テンプレートは削除できません。", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `テンプレート「${currentTemplateName}」を削除しますか？`
+    );
+    if (!confirmed) return;
+
+    templates = templates.filter((template) => template.name !== currentTemplateName);
+    saveTemplates(templates);
+
+    let fallback = findTemplate(DEFAULT_TEMPLATE_NAME) || templates[0];
+    if (!fallback) {
+      fallback = {
+        name: DEFAULT_TEMPLATE_NAME,
+        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
+      };
+      templates.push(fallback);
+      saveTemplates(templates);
+    }
+
+    currentTemplateName = fallback.name;
+    saveCurrentTemplateName(currentTemplateName);
+    renderTemplateOptions();
+    if (templateSelect) {
+      templateSelect.value = currentTemplateName;
+    }
+    updateTemplateActionStates();
+    selectTemplate(currentTemplateName, { silent: true });
+    setStatusMessage("テンプレートを削除しました。", "info");
+  }
+
+  function promptForTemplateName(defaultName) {
+    let name = window.prompt("テンプレート名を入力してください。", defaultName || "");
+    if (name === null) {
+      return null;
+    }
+    name = name.trim();
+    if (!name) {
+      throw new Error("テンプレート名を入力してください。");
+    }
+    if (templateNameExists(name)) {
+      throw new Error("同名のテンプレートが既に存在します。");
+    }
+    return name;
+  }
+
+  function templateNameExists(name) {
+    return templates.some((template) => template.name === name);
+  }
+
   function cloneChecklist(sections) {
     return normalizeChecklist(JSON.parse(JSON.stringify(sections)));
   }
@@ -319,6 +587,18 @@
     applyConfigButton.addEventListener("click", handleApplyConfig);
     resetConfigButton.addEventListener("click", handleResetConfig);
     copyConfigButton.addEventListener("click", handleCopyConfig);
+    if (templateSelect) {
+      templateSelect.addEventListener("change", handleTemplateChange);
+    }
+    if (saveTemplateButton) {
+      saveTemplateButton.addEventListener("click", handleSaveTemplate);
+    }
+    if (saveTemplateAsButton) {
+      saveTemplateAsButton.addEventListener("click", handleSaveTemplateAs);
+    }
+    if (deleteTemplateButton) {
+      deleteTemplateButton.addEventListener("click", handleDeleteTemplate);
+    }
   }
 
   function renderChecklist() {
@@ -433,9 +713,13 @@
     const confirmed = window.confirm("既定のチェックリストに戻しますか？");
     if (!confirmed) return;
     localStorage.removeItem(CONFIG_STORAGE_KEY);
-    applyChecklistConfiguration(cloneChecklist(DEFAULT_CHECKLIST_SECTIONS), {
-      persist: false,
-    });
+    currentTemplateName = DEFAULT_TEMPLATE_NAME;
+    saveCurrentTemplateName(currentTemplateName);
+    selectTemplate(currentTemplateName, { silent: true });
+    if (templateSelect) {
+      templateSelect.value = currentTemplateName;
+    }
+    updateTemplateActionStates();
     setStatusMessage("既定のチェックリストに戻しました。", "info");
   }
 
@@ -492,9 +776,9 @@
   }
 
   function applyChecklistConfiguration(sections, { persist } = { persist: true }) {
-    checklistSections = sections;
+    checklistSections = cloneChecklist(sections);
     if (persist) {
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(sections));
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(checklistSections));
     }
     pruneStateItems();
     renderChecklist();

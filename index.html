@@ -79,6 +79,23 @@
           <p class="config-help">
             JSON 形式で点検カテゴリと項目を編集できます。保存するとブラウザに設定が記録され、即座に反映されます。
           </p>
+          <div class="config-template">
+            <label class="config-template-label">
+              テンプレート
+              <select id="config-template-select" class="config-template-select"></select>
+            </label>
+            <div class="config-template-actions">
+              <button type="button" id="save-template" class="secondary">
+                テンプレートを上書き保存
+              </button>
+              <button type="button" id="save-template-as" class="secondary">
+                新規テンプレートとして保存
+              </button>
+              <button type="button" id="delete-template" class="secondary danger">
+                テンプレートを削除
+              </button>
+            </div>
+          </div>
           <label class="config-textarea-label" for="config-input">チェックリスト定義</label>
           <textarea
             id="config-input"

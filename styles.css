@@ -128,6 +128,39 @@ textarea {
   color: #475569;
 }
 
+.config-template {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.config-template-label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: #25313c;
+}
+
+.config-template-select {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #c5ced8;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.config-template-select:focus {
+  border-color: #0563c1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.18);
+}
+
+.config-template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .config-textarea-label {
   display: block;
   font-weight: 600;
