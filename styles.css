@@ -194,6 +194,110 @@ textarea {
   flex-wrap: wrap;
 }
 
+.area-description {
+  margin: 0 0 0.75rem;
+  color: #4a5563;
+}
+
+.areas-container {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.area-card {
+  border: 1px solid #d7dde4;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  padding: clamp(1rem, 2vw + 0.5rem, 2rem);
+  display: grid;
+  gap: 1rem;
+}
+
+.area-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.area-name-group {
+  display: grid;
+  gap: 0.4rem;
+  flex: 1 1 260px;
+}
+
+.area-name-group label {
+  font-weight: 600;
+  color: #25313c;
+}
+
+.area-name-input {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #c5ced8;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.area-name-input:focus {
+  border-color: #0563c1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.2);
+}
+
+.area-remove-button {
+  align-self: center;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: none;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+.area-remove-button:hover {
+  background: #fecaca;
+}
+
+.area-notes-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.area-notes-group label {
+  font-weight: 600;
+  color: #25313c;
+}
+
+.area-notes {
+  width: 100%;
+  min-height: 3.2rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  resize: vertical;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.area-notes:focus {
+  border-color: #0563c1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.18);
+}
+
+.area-checklist {
+  display: grid;
+  gap: 1rem;
+}
+
+.area-actions {
+  margin-top: 1rem;
+}
+
 .section-description {
   margin: 0 0 1rem;
   color: #4a5563;

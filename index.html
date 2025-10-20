@@ -69,7 +69,7 @@
 
       <section class="panel">
         <div class="list-header">
-          <h2>点検チェックリスト</h2>
+          <h2>点検箇所とチェックリスト</h2>
           <button type="button" id="reset-status" class="secondary">
             入力をリセット
           </button>
@@ -115,7 +115,15 @@
             </button>
           </div>
         </details>
-        <div id="checklist-container" class="checklist"></div>
+        <p class="area-description">
+          点検箇所ごとにチェックリストを入力できます。必要に応じて「点検箇所を追加」で増やしてください。
+        </p>
+        <div id="areas-container" class="areas-container"></div>
+        <div class="area-actions">
+          <button type="button" id="add-area-button" class="secondary">
+            点検箇所を追加
+          </button>
+        </div>
       </section>
 
       <section class="panel">

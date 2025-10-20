@@ -99,7 +99,8 @@
   ];
 
   const form = document.getElementById("inspection-form");
-  const checklistContainer = document.getElementById("checklist-container");
+  const areasContainer = document.getElementById("areas-container");
+  const addAreaButton = document.getElementById("add-area-button");
   const summarySection = document.getElementById("summary");
   const statusMessage = document.getElementById("status-message");
   const reportTextArea = document.getElementById("report-text");
@@ -117,7 +118,6 @@
   const copyConfigButton = document.getElementById("copy-config");
 
   const formFields = {
-    inspectionArea: document.getElementById("inspection-area"),
     facilityLocation: document.getElementById("facility-location"),
     inspectionDate: document.getElementById("inspection-date"),
     inspectorName: document.getElementById("inspector-name"),
@@ -128,15 +128,17 @@
   let templates = [];
   let currentTemplateName = DEFAULT_TEMPLATE_NAME;
 
+  let legacySingleAreaItems = null;
+  let legacySingleAreaName = "";
+
   let state = {
     form: {
-      inspectionArea: "",
       facilityLocation: "",
       inspectionDate: "",
       inspectorName: "",
       globalNotes: "",
     },
-    items: {},
+    areas: [],
   };
 
   init();
@@ -147,11 +149,12 @@
     saveCurrentTemplateName(currentTemplateName);
     checklistSections = loadChecklistConfig();
     loadState();
-    pruneStateItems();
+    ensureAreas();
+    pruneAreasForTemplate();
     initForm();
     initTemplateControls();
     initConfigEditor();
-    renderChecklist();
+    renderAreas();
     attachEventHandlers();
     updateSummary();
   }
@@ -159,20 +162,84 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      if (saved.form && saved.items) {
-        state = {
-          form: { ...state.form, ...saved.form },
-          items: { ...saved.items },
-        };
-        if (!state.form.inspectionArea && saved.form.facilityName) {
-          state.form.inspectionArea = saved.form.facilityName;
-          delete state.form.facilityName;
-          saveState();
+      if (saved && typeof saved === "object") {
+        if (saved.form && typeof saved.form === "object") {
+          state.form = { ...state.form, ...saved.form };
+          if (saved.form.inspectionArea) {
+            legacySingleAreaName = saved.form.inspectionArea;
+            delete state.form.inspectionArea;
+          }
+        }
+        if (Array.isArray(saved.areas)) {
+          state.areas = saved.areas
+            .map((area, index) => ({
+              id: area.id || createAreaId(),
+              name:
+                typeof area.name === "string"
+                  ? area.name
+                  : `点検箇所${index + 1}`,
+              notes: area.notes ? String(area.notes) : "",
+              items:
+                area.items && typeof area.items === "object"
+                  ? { ...area.items }
+                  : {},
+            }))
+            .filter(Boolean);
+        } else if (saved.items && typeof saved.items === "object") {
+          legacySingleAreaItems = saved.items;
         }
       }
-    } catch {
-      state = { ...state };
+    } catch (error) {
+      console.error("Failed to load state", error);
     }
+  }
+
+  function ensureAreas() {
+    if (!Array.isArray(state.areas)) {
+      state.areas = [];
+    }
+    if (state.areas.length === 0) {
+      const name =
+        legacySingleAreaName ||
+        state.form.facilityLocation ||
+        "点検箇所1";
+      const area = createArea(name);
+      if (legacySingleAreaItems) {
+        area.items = { ...legacySingleAreaItems };
+      }
+      state.areas.push(area);
+    } else {
+      state.areas = state.areas.map((area, index) => ({
+        id: area.id || createAreaId(),
+        name:
+          typeof area.name === "string"
+            ? area.name
+            : `点検箇所${index + 1}`,
+        notes: area.notes ? String(area.notes) : "",
+        items:
+          area.items && typeof area.items === "object"
+            ? { ...area.items }
+            : {},
+      }));
+    }
+    legacySingleAreaItems = null;
+    legacySingleAreaName = "";
+    saveState();
+  }
+
+  function createArea(name = "") {
+    return {
+      id: createAreaId(),
+      name,
+      notes: "",
+      items: {},
+    };
+  }
+
+  function createAreaId() {
+    return `area-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
   }
 
   function loadChecklistConfig() {
@@ -185,7 +252,8 @@
       console.error("Failed to load checklist config", error);
     }
 
-    const template = findTemplate(currentTemplateName) ||
+    const template =
+      findTemplate(currentTemplateName) ||
       findTemplate(DEFAULT_TEMPLATE_NAME);
     if (template) {
       return cloneChecklist(template.sections);
@@ -196,13 +264,6 @@
   function initConfigEditor() {
     if (!configInput) return;
     configInput.value = stringifyChecklist(checklistSections);
-  }
-
-  function initTemplateControls() {
-    if (!templateSelect) return;
-    renderTemplateOptions();
-    templateSelect.value = currentTemplateName;
-    updateTemplateActionStates();
   }
 
   function stringifyChecklist(sections) {
@@ -528,37 +589,29 @@
     return normalizeChecklist(JSON.parse(JSON.stringify(sections)));
   }
 
-  function pruneStateItems() {
-    const validIds = new Set(getAllItemIds(checklistSections));
-    const nextItems = {};
-    let changed = false;
-    Object.entries(state.items || {}).forEach(([itemId, itemState]) => {
-      if (validIds.has(itemId)) {
-        nextItems[itemId] = itemState;
-      } else {
-        changed = true;
-      }
-    });
-    if (changed) {
-      state.items = nextItems;
-      saveState();
-    }
-  }
-
-  function getAllItemIds(sections) {
-    const ids = [];
-    sections.forEach((section) => {
-      section.items.forEach((item) => ids.push(item.id));
-    });
-    return ids;
-  }
-
   function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const payload = {
+      form: { ...state.form },
+      areas: state.areas.map((area) => ({
+        id: area.id,
+        name: area.name,
+        notes: area.notes,
+        items: area.items,
+      })),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  function initTemplateControls() {
+    if (!templateSelect) return;
+    renderTemplateOptions();
+    templateSelect.value = currentTemplateName;
+    updateTemplateActionStates();
   }
 
   function initForm() {
     Object.entries(formFields).forEach(([key, element]) => {
+      if (!element) return;
       if (state.form[key]) {
         element.value = state.form[key];
       }
@@ -600,108 +653,279 @@
     if (deleteTemplateButton) {
       deleteTemplateButton.addEventListener("click", handleDeleteTemplate);
     }
+    if (addAreaButton) {
+      addAreaButton.addEventListener("click", handleAddArea);
+    }
   }
 
-  function renderChecklist() {
-    checklistContainer.innerHTML = "";
+  function renderAreas() {
+    if (!areasContainer) return;
+    areasContainer.innerHTML = "";
 
-    checklistSections.forEach((section) => {
-      const sectionEl = document.createElement("section");
-      sectionEl.className = "checklist-group";
+    state.areas.forEach((area, index) => {
+      const card = document.createElement("article");
+      card.className = "area-card";
+      card.dataset.areaId = area.id;
 
-      const heading = document.createElement("h3");
-      heading.textContent = section.title;
-      sectionEl.appendChild(heading);
+      const header = document.createElement("div");
+      header.className = "area-card-header";
 
-      section.items.forEach((item) => {
-        const itemState = state.items[item.id] || {
-          status: "",
-          note: "",
-        };
-
-        const itemEl = document.createElement("article");
-        itemEl.className = "checklist-item";
-        itemEl.dataset.itemId = item.id;
-
-        const header = document.createElement("div");
-        header.className = "item-header";
-
-        const title = document.createElement("h4");
-        title.className = "item-title";
-        title.textContent = item.title;
-        header.appendChild(title);
-
-        const statusContainer = document.createElement("div");
-        statusContainer.className = "status-options";
-
-        STATUS_ORDER.forEach((statusKey) => {
-          const label = document.createElement("label");
-          label.dataset.status = statusKey;
-
-          const input = document.createElement("input");
-          input.type = "radio";
-          input.name = `status-${item.id}`;
-          input.value = statusKey;
-          input.checked = itemState.status === statusKey;
-
-          input.addEventListener("change", () => {
-            updateItemState(item.id, { status: input.value });
-            highlightActiveStatus(statusContainer, input.value);
-          });
-
-          label.appendChild(input);
-          label.appendChild(document.createTextNode(STATUS_LABELS[statusKey]));
-          if (itemState.status === statusKey) {
-            label.classList.add("is-active");
-          }
-          statusContainer.appendChild(label);
-        });
-
-        header.appendChild(statusContainer);
-        itemEl.appendChild(header);
-
-        const note = document.createElement("textarea");
-        note.className = "note-input";
-        note.placeholder = item.notePlaceholder || "気づいた点を記入";
-        note.value = itemState.note || "";
-        note.addEventListener("input", () => {
-          updateItemState(item.id, { note: note.value });
-        });
-
-        itemEl.appendChild(note);
-        sectionEl.appendChild(itemEl);
+      const nameGroup = document.createElement("div");
+      nameGroup.className = "area-name-group";
+      const nameLabel = document.createElement("label");
+      nameLabel.textContent = "点検箇所名";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "area-name-input";
+      nameInput.placeholder = `点検箇所 ${index + 1}`;
+      nameInput.value = area.name || "";
+      nameInput.addEventListener("input", () => {
+        updateAreaName(area.id, nameInput.value);
       });
+      nameGroup.appendChild(nameLabel);
+      nameGroup.appendChild(nameInput);
+      header.appendChild(nameGroup);
 
-      checklistContainer.appendChild(sectionEl);
+      if (state.areas.length > 1) {
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "area-remove-button";
+        removeButton.textContent = "削除";
+        removeButton.addEventListener("click", () => handleRemoveArea(area.id));
+        header.appendChild(removeButton);
+      }
+
+      card.appendChild(header);
+
+      const notesGroup = document.createElement("div");
+      notesGroup.className = "area-notes-group";
+      const notesLabel = document.createElement("label");
+      notesLabel.textContent = "箇所メモ (任意)";
+      const notesTextarea = document.createElement("textarea");
+      notesTextarea.className = "area-notes";
+      notesTextarea.placeholder = "設備の状況や連絡事項を記入";
+      notesTextarea.value = area.notes || "";
+      notesTextarea.addEventListener("input", () => {
+        updateAreaNotes(area.id, notesTextarea.value);
+      });
+      notesGroup.appendChild(notesLabel);
+      notesGroup.appendChild(notesTextarea);
+      card.appendChild(notesGroup);
+
+      const areaChecklist = document.createElement("div");
+      areaChecklist.className = "area-checklist";
+      checklistSections.forEach((section) => {
+        areaChecklist.appendChild(createChecklistGroup(area, section));
+      });
+      card.appendChild(areaChecklist);
+
+      areasContainer.appendChild(card);
     });
   }
 
-  function updateItemState(itemId, partial) {
-    const current = state.items[itemId] || { status: "", note: "" };
-    state.items[itemId] = { ...current, ...partial };
+  function createChecklistGroup(area, section) {
+    const sectionEl = document.createElement("section");
+    sectionEl.className = "checklist-group";
+
+    const heading = document.createElement("h3");
+    heading.textContent = section.title;
+    sectionEl.appendChild(heading);
+
+    section.items.forEach((item) => {
+      const itemState = area.items[item.id] || {
+        status: "",
+        note: "",
+      };
+
+      const itemEl = document.createElement("article");
+      itemEl.className = "checklist-item";
+      itemEl.dataset.itemId = item.id;
+
+      const header = document.createElement("div");
+      header.className = "item-header";
+
+      const title = document.createElement("h4");
+      title.className = "item-title";
+      title.textContent = item.title;
+      header.appendChild(title);
+
+      const statusContainer = document.createElement("div");
+      statusContainer.className = "status-options";
+
+      STATUS_ORDER.forEach((statusKey) => {
+        const label = document.createElement("label");
+        label.dataset.status = statusKey;
+
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = `status-${area.id}-${item.id}`;
+        input.value = statusKey;
+        input.checked = itemState.status === statusKey;
+
+        input.addEventListener("change", () => {
+          updateAreaItemState(area.id, item.id, { status: input.value });
+          highlightActiveStatus(statusContainer, input.value);
+        });
+
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(STATUS_LABELS[statusKey]));
+        if (itemState.status === statusKey) {
+          label.classList.add("is-active");
+        }
+        statusContainer.appendChild(label);
+      });
+
+      header.appendChild(statusContainer);
+      itemEl.appendChild(header);
+
+      const note = document.createElement("textarea");
+      note.className = "note-input";
+      note.placeholder = item.notePlaceholder || "気づいた点を記入";
+      note.value = itemState.note || "";
+      note.addEventListener("input", () => {
+        updateAreaItemState(area.id, item.id, { note: note.value });
+      });
+
+      itemEl.appendChild(note);
+      sectionEl.appendChild(itemEl);
+    });
+
+    return sectionEl;
+  }
+
+  function updateAreaName(areaId, value) {
+    const area = state.areas.find((item) => item.id === areaId);
+    if (!area) return;
+    area.name = value;
     saveState();
     updateSummary();
   }
 
-  function handleReset() {
-    const confirmed = window.confirm("チェック項目の入力をすべてリセットしますか？");
-    if (!confirmed) return;
-    state.items = {};
+  function updateAreaNotes(areaId, value) {
+    const area = state.areas.find((item) => item.id === areaId);
+    if (!area) return;
+    area.notes = value;
     saveState();
-    renderChecklist();
+    updateSummary();
+  }
+
+  function updateAreaItemState(areaId, itemId, partial) {
+    const area = state.areas.find((item) => item.id === areaId);
+    if (!area) return;
+    const current = area.items[itemId] || { status: "", note: "" };
+    area.items[itemId] = { ...current, ...partial };
+    if (
+      !area.items[itemId].status &&
+      (!area.items[itemId].note || area.items[itemId].note.trim() === "")
+    ) {
+      delete area.items[itemId];
+    }
+    saveState();
+    updateSummary();
+  }
+
+  function handleAddArea() {
+    const area = createArea(`点検箇所${state.areas.length + 1}`);
+    state.areas.push(area);
+    saveState();
+    renderAreas();
+    updateSummary();
+    setStatusMessage(`点検箇所「${area.name}」を追加しました。`, "info");
+    requestAnimationFrame(() => {
+      if (!areasContainer) return;
+      const input = areasContainer.querySelector(
+        `[data-area-id="${area.id}"] .area-name-input`
+      );
+      if (input) {
+        input.focus();
+      }
+    });
+  }
+
+  function handleRemoveArea(areaId) {
+    if (state.areas.length <= 1) {
+      setStatusMessage("点検箇所は最低 1 件必要です。", "error");
+      return;
+    }
+    const target = state.areas.find((area) => area.id === areaId);
+    const confirmed = window.confirm(
+      `点検箇所「${target?.name || ""}」を削除しますか？`
+    );
+    if (!confirmed) return;
+    state.areas = state.areas.filter((area) => area.id !== areaId);
+    saveState();
+    renderAreas();
+    updateSummary();
+    setStatusMessage("点検箇所を削除しました。", "info");
+  }
+
+  function handleReset() {
+    const confirmed = window.confirm("すべての点検項目をリセットしますか？");
+    if (!confirmed) return;
+    state.areas = state.areas.map((area) => ({
+      ...area,
+      items: {},
+    }));
+    saveState();
+    renderAreas();
     updateSummary();
     setStatusMessage("チェック項目をリセットしました。", "info");
   }
 
-  function handleApplyConfig() {
-    const raw = configInput.value.trim();
-    if (!raw) {
-      setStatusMessage("設定内容を入力してください。", "error");
+  function pruneAreasForTemplate() {
+    const validIds = new Set(getAllItemIds(checklistSections));
+    state.areas.forEach((area) => {
+      const nextItems = {};
+      Object.entries(area.items || {}).forEach(([itemId, itemState]) => {
+        if (validIds.has(itemId)) {
+          nextItems[itemId] = itemState;
+        }
+      });
+      area.items = nextItems;
+    });
+    saveState();
+  }
+
+  function getAllItemIds(sections) {
+    const ids = [];
+    sections.forEach((section) => {
+      section.items.forEach((item) => ids.push(item.id));
+    });
+    return ids;
+  }
+
+  async function handleCopyReport() {
+    if (!form.reportValidity()) {
+      setStatusMessage("必須項目を入力してください。", "error");
       return;
     }
 
+    const items = getCompletedItems();
+    if (items.length === 0) {
+      setStatusMessage("各点検箇所のステータスを入力してください。", "error");
+      return;
+    }
+
+    updateSummary();
+
+    const reportText = reportTextArea.value;
     try {
-      const parsed = parseChecklistConfig(raw);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(reportText);
+      } else {
+        fallbackCopy(reportTextArea);
+      }
+      setStatusMessage("報告テキストをコピーしました。", "success");
+    } catch (error) {
+      console.error("Failed to copy report text", error);
+      setStatusMessage("コピーに失敗しました。手動でコピーしてください。", "error");
+      fallbackCopy(reportTextArea);
+    }
+  }
+
+  function handleApplyConfig() {
+    try {
+      const parsed = parseConfigInput();
       applyChecklistConfiguration(parsed, { persist: true });
       setStatusMessage("チェックリスト設定を更新しました。", "success");
     } catch (error) {
@@ -713,12 +937,11 @@
   function handleResetConfig() {
     const confirmed = window.confirm("既定のチェックリストに戻しますか？");
     if (!confirmed) return;
-    localStorage.removeItem(CONFIG_STORAGE_KEY);
     currentTemplateName = DEFAULT_TEMPLATE_NAME;
     saveCurrentTemplateName(currentTemplateName);
-    selectTemplate(currentTemplateName, { silent: true });
+    selectTemplate(DEFAULT_TEMPLATE_NAME, { silent: true });
     if (templateSelect) {
-      templateSelect.value = currentTemplateName;
+      templateSelect.value = DEFAULT_TEMPLATE_NAME;
     }
     updateTemplateActionStates();
     setStatusMessage("既定のチェックリストに戻しました。", "info");
@@ -747,71 +970,34 @@
     });
   }
 
-  async function handleCopyReport() {
-    if (!form.reportValidity()) {
-      setStatusMessage("必須項目を入力してください。", "error");
-      return;
-    }
-
-    const items = getCompletedItems();
-    if (items.length === 0) {
-      setStatusMessage("チェック項目にステータスを入力してください。", "error");
-      return;
-    }
-
-    updateSummary();
-
-    const reportText = reportTextArea.value;
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(reportText);
-      } else {
-        fallbackCopy(reportTextArea);
-      }
-      setStatusMessage("報告テキストをコピーしました。", "success");
-    } catch (error) {
-      console.error("Failed to copy report text", error);
-      setStatusMessage("コピーに失敗しました。手動でコピーしてください。", "error");
-      fallbackCopy(reportTextArea);
-    }
-  }
-
-  function applyChecklistConfiguration(sections, { persist } = { persist: true }) {
-    checklistSections = cloneChecklist(sections);
-    if (persist) {
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(checklistSections));
-    }
-    pruneStateItems();
-    renderChecklist();
-    updateSummary();
-    if (configInput) {
-      configInput.value = stringifyChecklist(checklistSections);
-    }
-  }
-
   function getCompletedItems() {
-    return checklistSections.flatMap((section) =>
-      section.items
-        .map((item) => {
-          const itemState = state.items[item.id];
-          if (!itemState || !itemState.status) return null;
-          return {
+    const results = [];
+    state.areas.forEach((area) => {
+      checklistSections.forEach((section) => {
+        section.items.forEach((item) => {
+          const itemState = area.items[item.id];
+          if (!itemState || !itemState.status) return;
+          results.push({
+            areaId: area.id,
+            areaName: area.name || "",
+            areaNotes: area.notes || "",
             section: section.title,
             id: item.id,
             title: item.title,
             status: itemState.status,
             note: itemState.note,
-          };
-        })
-        .filter(Boolean)
-    );
+          });
+        });
+      });
+    });
+    return results;
   }
 
   function updateSummary() {
     const items = getCompletedItems();
     if (items.length === 0) {
       summarySection.innerHTML =
-        '<div class="empty-state">チェック内容を入力すると要約が表示されます。</div>';
+        '<div class="empty-state">各点検箇所のチェックを入力すると結果が表示されます。</div>';
       reportTextArea.value = buildReportText(items);
       return;
     }
@@ -825,59 +1011,95 @@
     );
 
     const total = items.length;
+    const areaNames =
+      state.areas.map((area, index) => area.name || `点検箇所${index + 1}`).join("、") ||
+      "未入力";
     const infoBlock = `
       <div>
-        <h3>${state.form.inspectionArea || "点検箇所未入力"} の点検結果</h3>
+        <h3>点検結果概要</h3>
         <p>
           点検日: ${formatDate(state.form.inspectionDate)} /
           点検者: ${state.form.inspectorName || "未入力"} /
-          記録件数: ${total} 件
+          点検箇所数: ${state.areas.length}
         </p>
+        <p>点検箇所: ${escapeHtml(areaNames)}</p>
         <p>
           適合: ${counts.ok ?? 0} 件 /
           注意: ${counts.attention ?? 0} 件 /
-          不適合: ${counts.issue ?? 0} 件
+          不適合: ${counts.issue ?? 0} 件 /
+          記録件数: ${total} 件
         </p>
         ${
           state.form.globalNotes
-            ? `<p>特記事項: ${escapeHtml(state.form.globalNotes)}</p>`
+            ? `<p>全体メモ: ${escapeHtml(state.form.globalNotes)}</p>`
             : ""
         }
       </div>
     `;
 
-    const grouped = groupItemsBySection(items);
-    const listMarkup = grouped
-      .map((group) => {
-        const itemsMarkup = group.items
-          .map((item) => {
-            const badgeClass = `status-badge status-${item.status}`;
-            const noteMarkup = item.note
-              ? `<p>${escapeHtml(item.note)}</p>`
-              : "";
+    const areaSummaries = state.areas
+      .map((area, index) => {
+        const areaItems = items.filter((item) => item.areaId === area.id);
+        if (areaItems.length === 0) {
+          return `
+            <section class="summary-group area-summary">
+              <h3>${escapeHtml(area.name || `点検箇所${index + 1}`)}</h3>
+              ${
+                area.notes
+                  ? `<p>箇所メモ: ${escapeHtml(area.notes)}</p>`
+                  : ""
+              }
+              <div class="empty-state">まだチェックが入力されていません。</div>
+            </section>
+          `;
+        }
+
+        const grouped = groupItemsBySection(areaItems);
+        const itemsMarkup = grouped
+          .map((group) => {
+            const groupItems = group.items
+              .map((item) => {
+                const badgeClass = `status-badge status-${item.status}`;
+                const noteMarkup = item.note
+                  ? `<p>${escapeHtml(item.note)}</p>`
+                  : "";
+                return `
+                  <article class="summary-item">
+                    <div class="summary-item-header">
+                      <h4>${item.title}</h4>
+                      <span class="${badgeClass}">${STATUS_LABELS[item.status]}</span>
+                    </div>
+                    ${noteMarkup}
+                  </article>
+                `;
+              })
+              .join("");
             return `
-              <article class="summary-item">
-                <div class="summary-item-header">
-                  <h4>${item.title}</h4>
-                  <span class="${badgeClass}">${STATUS_LABELS[item.status]}</span>
+              <section class="summary-group">
+                <h3>${group.section}</h3>
+                <div class="summary-list">
+                  ${groupItems}
                 </div>
-                ${noteMarkup}
-              </article>
+              </section>
             `;
           })
           .join("");
+
         return `
-          <section class="summary-group">
-            <h3>${group.section}</h3>
-            <div class="summary-list">
-              ${itemsMarkup}
-            </div>
+          <section class="summary-group area-summary">
+            <h3>${escapeHtml(area.name || `点検箇所${index + 1}`)}</h3>
+            ${
+              area.notes
+                ? `<p>箇所メモ: ${escapeHtml(area.notes)}</p>`
+                : ""
+            }
+            ${itemsMarkup}
           </section>
         `;
       })
       .join("");
 
-    summarySection.innerHTML = `${infoBlock}${listMarkup}`;
+    summarySection.innerHTML = `${infoBlock}${areaSummaries}`;
     reportTextArea.value = buildReportText(items);
   }
 
@@ -916,33 +1138,47 @@
       .replace(/'/g, "&#039;");
   }
 
-  // Assemble a plain text summary that is easy to copy into email or chat tools.
   function buildReportText(items) {
     const lines = [];
     lines.push("以下のとおり施設安全点検を実施しました。");
     lines.push("");
-    lines.push(`点検箇所: ${state.form.inspectionArea || "未入力"}`);
+    lines.push(
+      `点検箇所数: ${state.areas.length} / ${state.areas
+        .map((area, index) => area.name || `点検箇所${index + 1}`)
+        .join("、") || "未入力"}`
+    );
     lines.push(`所在地: ${state.form.facilityLocation || "未入力"}`);
     lines.push(`点検日: ${formatDate(state.form.inspectionDate)}`);
     lines.push(`点検者: ${state.form.inspectorName || "未入力"}`);
     lines.push("");
     lines.push("■ 点検結果");
 
-    const grouped = groupItemsBySection(items);
-    grouped.forEach((group) => {
-      lines.push(`【${group.section}】`);
-      group.items.forEach((item) => {
-        lines.push(
-          `- ${item.title}: ${STATUS_LABELS[item.status]}${
-            item.note ? ` / 備考: ${item.note}` : ""
-          }`
-        );
-      });
+    state.areas.forEach((area, index) => {
+      const areaItems = items.filter((item) => item.areaId === area.id);
+      lines.push(`【${area.name || `点検箇所${index + 1}`}】`);
+      if (area.notes) {
+        lines.push(`・箇所メモ: ${area.notes}`);
+      }
+      if (areaItems.length === 0) {
+        lines.push("・チェック未入力");
+      } else {
+        const grouped = groupItemsBySection(areaItems);
+        grouped.forEach((group) => {
+          lines.push(`- ${group.section}`);
+          group.items.forEach((item) => {
+            lines.push(
+              `  ・${item.title}: ${STATUS_LABELS[item.status]}${
+                item.note ? ` / 備考: ${item.note}` : ""
+              }`
+            );
+          });
+        });
+      }
       lines.push("");
     });
 
     if (state.form.globalNotes) {
-      lines.push("■ 特記事項");
+      lines.push("■ 全体メモ");
       lines.push(state.form.globalNotes);
       lines.push("");
     }
@@ -951,11 +1187,25 @@
     return lines.join("\n");
   }
 
-  function fallbackCopy(textarea) {
-    textarea.focus();
-    textarea.select();
+  function applyChecklistConfiguration(sections, { persist } = { persist: true }) {
+    checklistSections = cloneChecklist(sections);
+    if (persist) {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(checklistSections));
+    }
+    pruneAreasForTemplate();
+    renderAreas();
+    updateSummary();
+    if (configInput) {
+      configInput.value = stringifyChecklist(checklistSections);
+    }
+  }
+
+  function fallbackCopy(element) {
+    if (!element) return;
+    element.focus();
+    element.select();
     document.execCommand("copy");
-    textarea.setSelectionRange(0, 0);
+    element.setSelectionRange(0, 0);
   }
 
   function setStatusMessage(message, level) {
