@@ -200,9 +200,48 @@ textarea {
 }
 
 .areas-container {
-  display: grid;
-  gap: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
   margin-top: 1rem;
+}
+
+.area-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.area-tab {
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #1f2933;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.area-tab:hover {
+  background: #e2e8f0;
+}
+
+.area-tab.is-active {
+  background: #fff;
+  color: #0563c1;
+  border-color: #0563c1;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.18);
+}
+
+.area-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.25);
+}
+
+.area-panels {
+  position: relative;
 }
 
 .area-card {

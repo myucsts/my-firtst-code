@@ -141,6 +141,8 @@
     areas: [],
   };
 
+  let activeAreaId = null;
+
   const SAVE_STATE_DEBOUNCE_MS = 200;
   let saveStateTimer = null;
   let isStateDirty = false;
@@ -155,6 +157,9 @@
     loadState();
     ensureAreas();
     pruneAreasForTemplate();
+    if (!activeAreaId || !state.areas.some((area) => area.id === activeAreaId)) {
+      activeAreaId = state.areas[0]?.id || null;
+    }
     initForm();
     initTemplateControls();
     initConfigEditor();
@@ -193,6 +198,9 @@
         } else if (saved.items && typeof saved.items === "object") {
           legacySingleAreaItems = saved.items;
         }
+        if (typeof saved.activeAreaId === "string") {
+          activeAreaId = saved.activeAreaId;
+        }
       }
     } catch (error) {
       console.error("Failed to load state", error);
@@ -229,6 +237,9 @@
     }
     legacySingleAreaItems = null;
     legacySingleAreaName = "";
+    if (!state.areas.some((area) => area.id === activeAreaId)) {
+      activeAreaId = state.areas[0]?.id || null;
+    }
     saveState({ immediate: true });
   }
 
@@ -626,6 +637,7 @@
         notes: area.notes,
         items: area.items,
       })),
+      activeAreaId,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     isStateDirty = false;
@@ -709,10 +721,57 @@
     if (!areasContainer) return;
     areasContainer.innerHTML = "";
 
+    if (state.areas.length === 0) {
+      return;
+    }
+
+    if (!activeAreaId || !state.areas.some((area) => area.id === activeAreaId)) {
+      activeAreaId = state.areas[0].id;
+    }
+
+    const tabList = document.createElement("div");
+    tabList.className = "area-tabs";
+    tabList.setAttribute("role", "tablist");
+
+    const panels = document.createElement("div");
+    panels.className = "area-panels";
+
     state.areas.forEach((area, index) => {
+      const displayName = getAreaDisplayName(area, index);
+      const tabId = `area-tab-${area.id}`;
+      const panelId = `area-panel-${area.id}`;
+
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "area-tab";
+      tab.dataset.tabFor = area.id;
+      tab.setAttribute("role", "tab");
+      tab.id = tabId;
+      tab.setAttribute("aria-controls", panelId);
+      tab.textContent = displayName;
+      tab.addEventListener("click", () => {
+        setActiveArea(area.id);
+      });
+      tab.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+          return;
+        }
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const nextIndex = (index + direction + state.areas.length) % state.areas.length;
+        const nextArea = state.areas[nextIndex];
+        if (nextArea) {
+          setActiveArea(nextArea.id, { focusTab: true });
+        }
+      });
+      tabList.appendChild(tab);
+
       const card = document.createElement("article");
       card.className = "area-card";
       card.dataset.areaId = area.id;
+      card.id = panelId;
+      card.setAttribute("role", "tabpanel");
+      card.setAttribute("aria-labelledby", tabId);
 
       const header = document.createElement("div");
       header.className = "area-card-header";
@@ -766,8 +825,70 @@
       });
       card.appendChild(areaChecklist);
 
-      areasContainer.appendChild(card);
+      panels.appendChild(card);
     });
+
+    areasContainer.appendChild(tabList);
+    areasContainer.appendChild(panels);
+    updateActiveAreaVisualState();
+  }
+
+  function setActiveArea(areaId, { focusTab = false } = {}) {
+    if (!areaId) return;
+    const exists = state.areas.some((area) => area.id === areaId);
+    if (!exists) return;
+    if (activeAreaId === areaId) {
+      if (focusTab) {
+        updateActiveAreaVisualState({ focusTab: true });
+      }
+      return;
+    }
+    activeAreaId = areaId;
+    updateActiveAreaVisualState({ focusTab });
+    saveState();
+  }
+
+  function updateActiveAreaVisualState({ focusTab = false } = {}) {
+    if (!areasContainer) return;
+
+    let activeTabElement = null;
+    Array.from(areasContainer.querySelectorAll(".area-tab")).forEach((tab) => {
+      const isActive = tab.dataset.tabFor === activeAreaId;
+      tab.classList.toggle("is-active", isActive);
+      tab.setAttribute("aria-selected", isActive ? "true" : "false");
+      tab.setAttribute("tabindex", isActive ? "0" : "-1");
+      if (isActive) {
+        activeTabElement = tab;
+      }
+    });
+
+    Array.from(areasContainer.querySelectorAll(".area-card")).forEach((panel) => {
+      const isActive = panel.dataset.areaId === activeAreaId;
+      panel.hidden = !isActive;
+      panel.classList.toggle("is-active", isActive);
+    });
+
+    if (focusTab && activeTabElement) {
+      activeTabElement.focus();
+    }
+  }
+
+  function getAreaDisplayName(area, index) {
+    const name = typeof area.name === "string" ? area.name.trim() : "";
+    if (name) {
+      return name;
+    }
+    return `点検箇所${index + 1}`;
+  }
+
+  function refreshAreaTabLabel(areaId) {
+    if (!areasContainer) return;
+    const index = state.areas.findIndex((item) => item.id === areaId);
+    if (index === -1) return;
+    const tab = areasContainer.querySelector(`.area-tab[data-tab-for="${areaId}"]`);
+    if (tab) {
+      tab.textContent = getAreaDisplayName(state.areas[index], index);
+    }
   }
 
   function createChecklistGroup(area, section) {
@@ -846,6 +967,7 @@
     area.name = value;
     saveState();
     updateSummary();
+    refreshAreaTabLabel(areaId);
   }
 
   function updateAreaNotes(areaId, value) {
@@ -874,6 +996,7 @@
   function handleAddArea() {
     const area = createArea(`点検箇所${state.areas.length + 1}`);
     state.areas.push(area);
+    activeAreaId = area.id;
     saveState();
     renderAreas();
     updateSummary();
@@ -894,12 +1017,18 @@
       setStatusMessage("点検箇所は最低 1 件必要です。", "error");
       return;
     }
-    const target = state.areas.find((area) => area.id === areaId);
+    const targetIndex = state.areas.findIndex((area) => area.id === areaId);
+    const target = targetIndex >= 0 ? state.areas[targetIndex] : null;
     const confirmed = window.confirm(
       `点検箇所「${target?.name || ""}」を削除しますか？`
     );
     if (!confirmed) return;
     state.areas = state.areas.filter((area) => area.id !== areaId);
+    if (state.areas.length > 0 && areaId === activeAreaId) {
+      const fallbackIndex = targetIndex > 0 ? targetIndex - 1 : 0;
+      const fallbackArea = state.areas[Math.min(fallbackIndex, state.areas.length - 1)];
+      activeAreaId = fallbackArea ? fallbackArea.id : state.areas[0].id;
+    }
     saveState();
     renderAreas();
     updateSummary();
