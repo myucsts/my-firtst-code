@@ -252,6 +252,7 @@ textarea {
   padding: clamp(1rem, 2vw + 0.5rem, 2rem);
   display: grid;
   gap: 1rem;
+  scroll-margin-top: 1.5rem;
 }
 
 .area-card-header {

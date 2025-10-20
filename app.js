@@ -838,20 +838,19 @@
     const exists = state.areas.some((area) => area.id === areaId);
     if (!exists) return;
     if (activeAreaId === areaId) {
-      if (focusTab) {
-        updateActiveAreaVisualState({ focusTab: true });
-      }
+      updateActiveAreaVisualState({ focusTab, scrollPanel: true });
       return;
     }
     activeAreaId = areaId;
-    updateActiveAreaVisualState({ focusTab });
+    updateActiveAreaVisualState({ focusTab, scrollPanel: true });
     saveState();
   }
 
-  function updateActiveAreaVisualState({ focusTab = false } = {}) {
+  function updateActiveAreaVisualState({ focusTab = false, scrollPanel = false } = {}) {
     if (!areasContainer) return;
 
     let activeTabElement = null;
+    let activePanelElement = null;
     Array.from(areasContainer.querySelectorAll(".area-tab")).forEach((tab) => {
       const isActive = tab.dataset.tabFor === activeAreaId;
       tab.classList.toggle("is-active", isActive);
@@ -866,7 +865,16 @@
       const isActive = panel.dataset.areaId === activeAreaId;
       panel.hidden = !isActive;
       panel.classList.toggle("is-active", isActive);
+      if (isActive) {
+        activePanelElement = panel;
+      }
     });
+
+    if (scrollPanel && activePanelElement) {
+      requestAnimationFrame(() => {
+        activePanelElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
 
     if (focusTab && activeTabElement) {
       activeTabElement.focus();
@@ -999,6 +1007,7 @@
     activeAreaId = area.id;
     saveState();
     renderAreas();
+    updateActiveAreaVisualState({ scrollPanel: true });
     updateSummary();
     setStatusMessage(`点検箇所「${area.name}」を追加しました。`, "info");
     requestAnimationFrame(() => {
