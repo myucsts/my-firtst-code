@@ -117,7 +117,7 @@
   const copyConfigButton = document.getElementById("copy-config");
 
   const formFields = {
-    facilityName: document.getElementById("facility-name"),
+    inspectionArea: document.getElementById("inspection-area"),
     facilityLocation: document.getElementById("facility-location"),
     inspectionDate: document.getElementById("inspection-date"),
     inspectorName: document.getElementById("inspector-name"),
@@ -130,7 +130,7 @@
 
   let state = {
     form: {
-      facilityName: "",
+      inspectionArea: "",
       facilityLocation: "",
       inspectionDate: "",
       inspectorName: "",
@@ -164,6 +164,11 @@
           form: { ...state.form, ...saved.form },
           items: { ...saved.items },
         };
+        if (!state.form.inspectionArea && saved.form.facilityName) {
+          state.form.inspectionArea = saved.form.facilityName;
+          delete state.form.facilityName;
+          saveState();
+        }
       }
     } catch {
       state = { ...state };
@@ -826,7 +831,7 @@
     const total = items.length;
     const infoBlock = `
       <div>
-        <h3>${state.form.facilityName || "施設名未入力"} の点検結果</h3>
+        <h3>${state.form.inspectionArea || "点検箇所未入力"} の点検結果</h3>
         <p>
           点検日: ${formatDate(state.form.inspectionDate)} /
           点検者: ${state.form.inspectorName || "未入力"} /
@@ -920,7 +925,7 @@
     const lines = [];
     lines.push("以下のとおり施設安全点検を実施しました。");
     lines.push("");
-    lines.push(`施設名: ${state.form.facilityName || "未入力"}`);
+    lines.push(`点検箇所: ${state.form.inspectionArea || "未入力"}`);
     lines.push(`所在地: ${state.form.facilityLocation || "未入力"}`);
     lines.push(`点検日: ${formatDate(state.form.inspectionDate)}`);
     lines.push(`点検者: ${state.form.inspectorName || "未入力"}`);
