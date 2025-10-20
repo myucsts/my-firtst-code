@@ -13,6 +13,17 @@ body {
   line-height: 1.55;
 }
 
+html,
+body {
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 a {
   color: #0563c1;
 }
@@ -41,19 +52,88 @@ textarea {
 }
 
 .page-main {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: clamp(1rem, 2vw + 0.5rem, 2.75rem);
+  padding: clamp(1rem, 2vw + 0.5rem, 2.5rem);
+  width: 100%;
   display: grid;
   gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  overflow: hidden;
+}
+
+.layout-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.layout-left {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 1rem;
+  min-height: 0;
+}
+
+.layout-right {
+  min-height: 0;
 }
 
 .panel {
   background: #fff;
   border-radius: 12px;
   border: 1px solid #d7dde4;
-  padding: clamp(1rem, 2vw + 0.5rem, 2.5rem);
+  padding: clamp(1rem, 2vw + 0.5rem, 2.3rem);
   box-shadow: 0 5px 15px rgba(15, 23, 42, 0.08);
+  min-height: 0;
+}
+
+.layout-left .panel:nth-child(2),
+.layout-right .panel {
+  overflow: auto;
+}
+
+.layout-left .panel:first-child {
+  overflow: visible;
+}
+
+.layout-right .panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-right .panel > .actions {
+  flex-shrink: 0;
+}
+
+.layout-right .panel > #status-message,
+.layout-right .panel > .summary,
+.layout-right .panel > .report-preview-label,
+.layout-right .panel > .report-text,
+.layout-right .panel > .report-text-help {
+  flex-shrink: 0;
+}
+
+.layout-right .panel > .summary {
+  flex-grow: 1;
+  overflow: auto;
+}
+
+.layout-right .panel > .report-text {
+  flex-grow: 0;
+}
+
+@media (min-width: 1024px) {
+  .page-main {
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .layout-column {
+    height: 100%;
+  }
 }
 
 .form-grid {

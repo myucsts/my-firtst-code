@@ -14,137 +14,141 @@
     </header>
 
     <main class="page-main">
-      <section class="panel">
-        <h2>点検情報</h2>
-        <form id="inspection-form" class="form-grid">
-          <label>
-            点検箇所
-            <input
-              id="inspection-area"
-              name="inspectionArea"
-              type="text"
-              placeholder="第一工場 西棟"
-              required
-            />
-          </label>
-          <label>
-            施設所在地
-            <input
-              id="facility-location"
-              name="facilityLocation"
-              type="text"
-              placeholder="東京都千代田区..."
-            />
-          </label>
-          <label>
-            点検日
-            <input
-              id="inspection-date"
-              name="inspectionDate"
-              type="date"
-              required
-            />
-          </label>
-          <label>
-            点検者
-            <input
-              id="inspector-name"
-              name="inspectorName"
-              type="text"
-              placeholder="山田 太郎"
-              required
-            />
-          </label>
-          <label class="full-width">
-            その他特記事項
-            <textarea
-              id="global-notes"
-              name="globalNotes"
-              rows="3"
-              placeholder="全体の所感や連絡事項を記入してください。"
-            ></textarea>
-          </label>
-        </form>
-      </section>
-
-      <section class="panel">
-        <div class="list-header">
-          <h2>点検チェックリスト</h2>
-          <button type="button" id="reset-status" class="secondary">
-            入力をリセット
-          </button>
-        </div>
-        <details class="config-details">
-          <summary>チェックリスト設定 (管理者向け)</summary>
-          <p class="config-help">
-            JSON 形式で点検カテゴリと項目を編集できます。保存するとブラウザに設定が記録され、即座に反映されます。
-          </p>
-          <div class="config-template">
-            <label class="config-template-label">
-              テンプレート
-              <select id="config-template-select" class="config-template-select"></select>
+      <div class="layout-column layout-left">
+        <section class="panel">
+          <h2>点検情報</h2>
+          <form id="inspection-form" class="form-grid">
+            <label>
+              点検箇所
+              <input
+                id="inspection-area"
+                name="inspectionArea"
+                type="text"
+                placeholder="第一工場 西棟"
+                required
+              />
             </label>
-            <div class="config-template-actions">
-              <button type="button" id="save-template" class="secondary">
-                テンプレートを上書き保存
+            <label>
+              施設所在地
+              <input
+                id="facility-location"
+                name="facilityLocation"
+                type="text"
+                placeholder="東京都千代田区..."
+              />
+            </label>
+            <label>
+              点検日
+              <input
+                id="inspection-date"
+                name="inspectionDate"
+                type="date"
+                required
+              />
+            </label>
+            <label>
+              点検者
+              <input
+                id="inspector-name"
+                name="inspectorName"
+                type="text"
+                placeholder="山田 太郎"
+                required
+              />
+            </label>
+            <label class="full-width">
+              その他特記事項
+              <textarea
+                id="global-notes"
+                name="globalNotes"
+                rows="3"
+                placeholder="全体の所感や連絡事項を記入してください。"
+              ></textarea>
+            </label>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="list-header">
+            <h2>点検チェックリスト</h2>
+            <button type="button" id="reset-status" class="secondary">
+              入力をリセット
+            </button>
+          </div>
+          <details class="config-details">
+            <summary>チェックリスト設定 (管理者向け)</summary>
+            <p class="config-help">
+              JSON 形式で点検カテゴリと項目を編集できます。保存するとブラウザに設定が記録され、即座に反映されます。
+            </p>
+            <div class="config-template">
+              <label class="config-template-label">
+                テンプレート
+                <select id="config-template-select" class="config-template-select"></select>
+              </label>
+              <div class="config-template-actions">
+                <button type="button" id="save-template" class="secondary">
+                  テンプレートを上書き保存
+                </button>
+                <button type="button" id="save-template-as" class="secondary">
+                  新規テンプレートとして保存
+                </button>
+                <button type="button" id="delete-template" class="secondary danger">
+                  テンプレートを削除
+                </button>
+              </div>
+            </div>
+            <label class="config-textarea-label" for="config-input">チェックリスト定義</label>
+            <textarea
+              id="config-input"
+              class="config-textarea"
+              rows="12"
+              spellcheck="false"
+            ></textarea>
+            <div class="config-actions">
+              <button type="button" id="apply-config" class="secondary">
+                設定を反映
               </button>
-              <button type="button" id="save-template-as" class="secondary">
-                新規テンプレートとして保存
+              <button type="button" id="reset-config" class="secondary danger">
+                既定のチェックリストに戻す
               </button>
-              <button type="button" id="delete-template" class="secondary danger">
-                テンプレートを削除
+              <button type="button" id="copy-config" class="secondary">
+                JSON をコピー
               </button>
             </div>
-          </div>
-          <label class="config-textarea-label" for="config-input">チェックリスト定義</label>
-          <textarea
-            id="config-input"
-            class="config-textarea"
-            rows="12"
-            spellcheck="false"
-          ></textarea>
-          <div class="config-actions">
-            <button type="button" id="apply-config" class="secondary">
-              設定を反映
-            </button>
-            <button type="button" id="reset-config" class="secondary danger">
-              既定のチェックリストに戻す
-            </button>
-            <button type="button" id="copy-config" class="secondary">
-              JSON をコピー
-            </button>
-          </div>
-        </details>
-        <div id="checklist-container" class="checklist"></div>
-      </section>
+          </details>
+          <div id="checklist-container" class="checklist"></div>
+        </section>
+      </div>
 
-      <section class="panel">
-        <h2>結果と共有</h2>
-        <p class="section-description">
-          「結果を更新」で入力内容を下の要約と報告テキストに反映します。「テキストをコピー」を押すとチャットやメール本文に貼り付けられる形でコピーできます。
-        </p>
-        <div class="actions">
-          <button type="button" id="refresh-summary" class="secondary">
-            結果を更新
-          </button>
-          <button type="button" id="copy-report" class="primary">
-            テキストをコピー
-          </button>
-        </div>
-        <div id="status-message" role="status" aria-live="polite"></div>
-        <section id="summary" class="summary" aria-live="polite"></section>
-        <label class="report-preview-label" for="report-text">共有用テキスト</label>
-        <textarea
-          id="report-text"
-          class="report-text"
-          rows="10"
-          readonly
-          aria-describedby="report-text-help"
-        ></textarea>
-        <p id="report-text-help" class="report-text-help">
-          コピー後にチャットやメール本文へ貼り付けて共有してください。
-        </p>
-      </section>
+      <div class="layout-column layout-right">
+        <section class="panel">
+          <h2>結果と共有</h2>
+          <p class="section-description">
+            「結果を更新」で入力内容を下の要約と報告テキストに反映します。「テキストをコピー」を押すとチャットやメール本文に貼り付けられる形でコピーできます。
+          </p>
+          <div class="actions">
+            <button type="button" id="refresh-summary" class="secondary">
+              結果を更新
+            </button>
+            <button type="button" id="copy-report" class="primary">
+              テキストをコピー
+            </button>
+          </div>
+          <div id="status-message" role="status" aria-live="polite"></div>
+          <section id="summary" class="summary" aria-live="polite"></section>
+          <label class="report-preview-label" for="report-text">共有用テキスト</label>
+          <textarea
+            id="report-text"
+            class="report-text"
+            rows="10"
+            readonly
+            aria-describedby="report-text-help"
+          ></textarea>
+          <p id="report-text-help" class="report-text-help">
+            コピー後にチャットやメール本文へ貼り付けて共有してください。
+          </p>
+        </section>
+      </div>
     </main>
 
     <footer class="page-footer">
