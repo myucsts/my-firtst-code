@@ -307,6 +307,9 @@
         if (!name) {
           throw new Error(`テンプレート ${index + 1} に名前を設定してください。`);
         }
+        if (name === DEFAULT_TEMPLATE_NAME) {
+          return;
+        }
         if (names.has(name)) {
           throw new Error(`テンプレート名 "${name}" が重複しています。`);
         }
@@ -318,30 +321,22 @@
       }
     });
 
-    if (!names.has(DEFAULT_TEMPLATE_NAME)) {
-      result.push({
-        name: DEFAULT_TEMPLATE_NAME,
-        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
-      });
-      names.add(DEFAULT_TEMPLATE_NAME);
-    }
-
-    if (result.length === 0) {
-      result.push({
-        name: DEFAULT_TEMPLATE_NAME,
-        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
-      });
-    }
+    result.push({
+      name: DEFAULT_TEMPLATE_NAME,
+      sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
+    });
 
     saveTemplates(result);
     return result;
   }
 
   function saveTemplates(list) {
-    const payload = list.map((template) => ({
-      name: template.name,
-      sections: template.sections,
-    }));
+    const payload = list
+      .filter((template) => template.name !== DEFAULT_TEMPLATE_NAME)
+      .map((template) => ({
+        name: template.name,
+        sections: template.sections,
+      }));
     localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(payload));
   }
 
@@ -376,6 +371,9 @@
     if (deleteTemplateButton) {
       const isDefault = currentTemplateName === DEFAULT_TEMPLATE_NAME;
       deleteTemplateButton.disabled = isDefault || templates.length <= 1;
+    }
+    if (saveTemplateButton) {
+      saveTemplateButton.disabled = currentTemplateName === DEFAULT_TEMPLATE_NAME;
     }
   }
 
@@ -429,6 +427,13 @@
   }
 
   function handleSaveTemplate() {
+    if (currentTemplateName === DEFAULT_TEMPLATE_NAME) {
+      setStatusMessage(
+        "標準テンプレートは上書きできません。新規テンプレートとして保存してください。",
+        "error"
+      );
+      return;
+    }
     try {
       const parsed = parseConfigInput();
       applyChecklistConfiguration(parsed, { persist: true });
@@ -488,17 +493,8 @@
     templates = templates.filter((template) => template.name !== currentTemplateName);
     saveTemplates(templates);
 
-    let fallback = findTemplate(DEFAULT_TEMPLATE_NAME) || templates[0];
-    if (!fallback) {
-      fallback = {
-        name: DEFAULT_TEMPLATE_NAME,
-        sections: cloneChecklist(DEFAULT_CHECKLIST_SECTIONS),
-      };
-      templates.push(fallback);
-      saveTemplates(templates);
-    }
-
-    currentTemplateName = fallback.name;
+    const fallback = findTemplate(DEFAULT_TEMPLATE_NAME) || templates[0];
+    currentTemplateName = fallback ? fallback.name : DEFAULT_TEMPLATE_NAME;
     saveCurrentTemplateName(currentTemplateName);
     renderTemplateOptions();
     if (templateSelect) {
