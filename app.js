@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "facility-safety-checklist:v1";
+  const CONFIG_STORAGE_KEY = "facility-safety-checklist:config";
   const STATUS_LABELS = {
     ok: "適合",
     attention: "注意",
@@ -7,7 +8,7 @@
   };
   const STATUS_ORDER = ["ok", "attention", "issue"];
 
-  const CHECKLIST_SECTIONS = [
+  const DEFAULT_CHECKLIST_SECTIONS = [
     {
       id: "entrance",
       title: "出入口・共用部",
@@ -98,27 +99,34 @@
   const checklistContainer = document.getElementById("checklist-container");
   const summarySection = document.getElementById("summary");
   const statusMessage = document.getElementById("status-message");
+  const reportTextArea = document.getElementById("report-text");
 
   const refreshSummaryButton = document.getElementById("refresh-summary");
-  const composeEmailButton = document.getElementById("compose-email");
+  const copyReportButton = document.getElementById("copy-report");
   const resetStatusButton = document.getElementById("reset-status");
+  const configInput = document.getElementById("config-input");
+  const configFileInput = document.getElementById("config-file-input");
+  const applyConfigButton = document.getElementById("apply-config");
+  const resetConfigButton = document.getElementById("reset-config");
+  const exportConfigButton = document.getElementById("export-config");
+  const importConfigButton = document.getElementById("import-config");
+  const copyConfigButton = document.getElementById("copy-config");
 
   const formFields = {
     facilityName: document.getElementById("facility-name"),
     facilityLocation: document.getElementById("facility-location"),
     inspectionDate: document.getElementById("inspection-date"),
     inspectorName: document.getElementById("inspector-name"),
-    recipientEmail: document.getElementById("recipient-email"),
     globalNotes: document.getElementById("global-notes"),
   };
 
+  let checklistSections = [];
   let state = {
     form: {
       facilityName: "",
       facilityLocation: "",
       inspectionDate: "",
       inspectorName: "",
-      recipientEmail: "",
       globalNotes: "",
     },
     items: {},
@@ -127,8 +135,11 @@
   init();
 
   function init() {
+    checklistSections = loadChecklistConfig();
     loadState();
+    pruneStateItems();
     initForm();
+    initConfigEditor();
     renderChecklist();
     attachEventHandlers();
     updateSummary();
@@ -146,6 +157,134 @@
     } catch {
       state = { ...state };
     }
+  }
+
+  function loadChecklistConfig() {
+    try {
+      const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (stored) {
+        return parseChecklistConfig(stored);
+      }
+    } catch (error) {
+      console.error("Failed to load checklist config", error);
+    }
+    return cloneChecklist(DEFAULT_CHECKLIST_SECTIONS);
+  }
+
+  function initConfigEditor() {
+    if (!configInput) return;
+    configInput.value = stringifyChecklist(checklistSections);
+  }
+
+  function stringifyChecklist(sections) {
+    return JSON.stringify(sections, null, 2);
+  }
+
+  function parseChecklistConfig(rawText) {
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error("JSON の形式が正しくありません。構造を確認してください。");
+    }
+    return normalizeChecklist(data);
+  }
+
+  function normalizeChecklist(sections) {
+    if (!Array.isArray(sections) || sections.length === 0) {
+      throw new Error("チェックリストは 1 件以上のカテゴリを含む配列で指定してください。");
+    }
+
+    const sectionIds = new Set();
+    const itemIds = new Set();
+
+    return sections.map((section, sectionIndex) => {
+      if (!section || typeof section !== "object") {
+        throw new Error(`カテゴリ ${sectionIndex + 1} の形式が正しくありません。`);
+      }
+      const id = String(section.id || "").trim();
+      const title = String(section.title || "").trim();
+      const items = Array.isArray(section.items) ? section.items : [];
+
+      if (!id) {
+        throw new Error(`カテゴリ ${sectionIndex + 1} に ID を設定してください。`);
+      }
+      if (sectionIds.has(id)) {
+        throw new Error(`カテゴリ ID "${id}" が重複しています。`);
+      }
+      sectionIds.add(id);
+
+      if (!title) {
+        throw new Error(`カテゴリ ${sectionIndex + 1} にタイトルを設定してください。`);
+      }
+      if (items.length === 0) {
+        throw new Error(`カテゴリ "${title}" に 1 件以上の点検項目を設定してください。`);
+      }
+
+      const normalizedItems = items.map((item, itemIndex) => {
+        if (!item || typeof item !== "object") {
+          throw new Error(`カテゴリ "${title}" の項目 ${itemIndex + 1} が不正です。`);
+        }
+        const itemId = String(item.id || "").trim();
+        const itemTitle = String(item.title || "").trim();
+        const notePlaceholder = item.notePlaceholder
+          ? String(item.notePlaceholder)
+          : "";
+
+        if (!itemId) {
+          throw new Error(`カテゴリ "${title}" の項目 ${itemIndex + 1} に ID を設定してください。`);
+        }
+        if (itemIds.has(itemId)) {
+          throw new Error(`項目 ID "${itemId}" が重複しています。`);
+        }
+        itemIds.add(itemId);
+
+        if (!itemTitle) {
+          throw new Error(`項目 ID "${itemId}" にタイトルを設定してください。`);
+        }
+
+        return {
+          id: itemId,
+          title: itemTitle,
+          notePlaceholder,
+        };
+      });
+
+      return {
+        id,
+        title,
+        items: normalizedItems,
+      };
+    });
+  }
+
+  function cloneChecklist(sections) {
+    return normalizeChecklist(JSON.parse(JSON.stringify(sections)));
+  }
+
+  function pruneStateItems() {
+    const validIds = new Set(getAllItemIds(checklistSections));
+    const nextItems = {};
+    let changed = false;
+    Object.entries(state.items || {}).forEach(([itemId, itemState]) => {
+      if (validIds.has(itemId)) {
+        nextItems[itemId] = itemState;
+      } else {
+        changed = true;
+      }
+    });
+    if (changed) {
+      state.items = nextItems;
+      saveState();
+    }
+  }
+
+  function getAllItemIds(sections) {
+    const ids = [];
+    sections.forEach((section) => {
+      section.items.forEach((item) => ids.push(item.id));
+    });
+    return ids;
   }
 
   function saveState() {
@@ -178,14 +317,22 @@
       setStatusMessage("要約を更新しました。", "info");
     });
 
-    composeEmailButton.addEventListener("click", handleComposeEmail);
+    copyReportButton.addEventListener("click", handleCopyReport);
     resetStatusButton.addEventListener("click", handleReset);
+    applyConfigButton.addEventListener("click", handleApplyConfig);
+    resetConfigButton.addEventListener("click", handleResetConfig);
+    exportConfigButton.addEventListener("click", handleExportConfig);
+    importConfigButton.addEventListener("click", handleImportConfig);
+    copyConfigButton.addEventListener("click", handleCopyConfig);
+    if (configFileInput) {
+      configFileInput.addEventListener("change", handleConfigFileSelected);
+    }
   }
 
   function renderChecklist() {
     checklistContainer.innerHTML = "";
 
-    CHECKLIST_SECTIONS.forEach((section) => {
+    checklistSections.forEach((section) => {
       const sectionEl = document.createElement("section");
       sectionEl.className = "checklist-group";
 
@@ -273,22 +420,108 @@
     setStatusMessage("チェック項目をリセットしました。", "info");
   }
 
+  function handleApplyConfig() {
+    const raw = configInput.value.trim();
+    if (!raw) {
+      setStatusMessage("設定内容を入力してください。", "error");
+      return;
+    }
+
+    try {
+      const parsed = parseChecklistConfig(raw);
+      applyChecklistConfiguration(parsed, { persist: true });
+      setStatusMessage("チェックリスト設定を更新しました。", "success");
+    } catch (error) {
+      console.error("Failed to apply checklist config", error);
+      setStatusMessage(error.message || "設定の更新に失敗しました。", "error");
+    }
+  }
+
+  function handleResetConfig() {
+    const confirmed = window.confirm("既定のチェックリストに戻しますか？");
+    if (!confirmed) return;
+    localStorage.removeItem(CONFIG_STORAGE_KEY);
+    applyChecklistConfiguration(cloneChecklist(DEFAULT_CHECKLIST_SECTIONS), {
+      persist: false,
+    });
+    setStatusMessage("既定のチェックリストに戻しました。", "info");
+  }
+
+  async function handleCopyConfig() {
+    if (!configInput) return;
+    const text = configInput.value;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        fallbackCopy(configInput);
+      }
+      setStatusMessage("JSON 設定をコピーしました。", "success");
+    } catch (error) {
+      console.error("Failed to copy config json", error);
+      setStatusMessage("コピーに失敗しました。手動でコピーしてください。", "error");
+      fallbackCopy(configInput);
+    }
+  }
+
+  function handleExportConfig() {
+    try {
+      const data = stringifyChecklist(checklistSections);
+      const filename = `facility-checklist-config-${formatTimestamp(
+        new Date()
+      )}.json`;
+      downloadTextFile(data, filename, "application/json");
+      setStatusMessage("JSON 設定ファイルをエクスポートしました。", "success");
+    } catch (error) {
+      console.error("Failed to export checklist config", error);
+      setStatusMessage("エクスポートに失敗しました。", "error");
+    }
+  }
+
+  function handleImportConfig() {
+    if (!configFileInput) {
+      setStatusMessage("インポート用のファイル入力が利用できません。", "error");
+      return;
+    }
+    configFileInput.value = "";
+    configFileInput.click();
+  }
+
+  function handleConfigFileSelected(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "");
+        const parsed = parseChecklistConfig(text);
+        applyChecklistConfiguration(parsed, { persist: true });
+        setStatusMessage("JSON 設定ファイルをインポートしました。", "success");
+      } catch (error) {
+        console.error("Failed to import checklist config", error);
+        setStatusMessage(error.message || "インポートに失敗しました。", "error");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.onerror = () => {
+      console.error("Failed to read checklist config file", reader.error);
+      setStatusMessage("ファイルの読み込みに失敗しました。", "error");
+      event.target.value = "";
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
   function highlightActiveStatus(container, activeStatus) {
     Array.from(container.querySelectorAll("label")).forEach((label) => {
       label.classList.toggle("is-active", label.dataset.status === activeStatus);
     });
   }
 
-  function handleComposeEmail() {
+  async function handleCopyReport() {
     if (!form.reportValidity()) {
       setStatusMessage("必須項目を入力してください。", "error");
-      return;
-    }
-
-    const { recipientEmail } = state.form;
-    if (!recipientEmail || !validateEmail(recipientEmail)) {
-      setStatusMessage("担当者メールアドレスの形式を確認してください。", "error");
-      formFields.recipientEmail.focus();
       return;
     }
 
@@ -300,22 +533,36 @@
 
     updateSummary();
 
-    const subject = buildEmailSubject();
-    const body = buildEmailBody(items);
-    const mailto = `mailto:${encodeURIComponent(
-      recipientEmail
-    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    window.location.href = mailto;
-    setStatusMessage("メール作成ウィンドウを開きます。", "success");
+    const reportText = reportTextArea.value;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(reportText);
+      } else {
+        fallbackCopy(reportTextArea);
+      }
+      setStatusMessage("報告テキストをコピーしました。", "success");
+    } catch (error) {
+      console.error("Failed to copy report text", error);
+      setStatusMessage("コピーに失敗しました。手動でコピーしてください。", "error");
+      fallbackCopy(reportTextArea);
+    }
   }
 
-  function validateEmail(value) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  function applyChecklistConfiguration(sections, { persist } = { persist: true }) {
+    checklistSections = sections;
+    if (persist) {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(sections));
+    }
+    pruneStateItems();
+    renderChecklist();
+    updateSummary();
+    if (configInput) {
+      configInput.value = stringifyChecklist(checklistSections);
+    }
   }
 
   function getCompletedItems() {
-    return CHECKLIST_SECTIONS.flatMap((section) =>
+    return checklistSections.flatMap((section) =>
       section.items
         .map((item) => {
           const itemState = state.items[item.id];
@@ -337,6 +584,7 @@
     if (items.length === 0) {
       summarySection.innerHTML =
         '<div class="empty-state">チェック内容を入力すると要約が表示されます。</div>';
+      reportTextArea.value = buildReportText(items);
       return;
     }
 
@@ -402,6 +650,7 @@
       .join("");
 
     summarySection.innerHTML = `${infoBlock}${listMarkup}`;
+    reportTextArea.value = buildReportText(items);
   }
 
   function groupItemsBySection(items) {
@@ -439,14 +688,8 @@
       .replace(/'/g, "&#039;");
   }
 
-  function buildEmailSubject() {
-    const facility = state.form.facilityName || "施設名未入力";
-    const date = formatDate(state.form.inspectionDate);
-    return `施設安全点検結果 ${facility} (${date})`;
-  }
-
-  // Assemble a plain text summary that is easy to copy into email clients.
-  function buildEmailBody(items) {
+  // Assemble a plain text summary that is easy to copy into email or chat tools.
+  function buildReportText(items) {
     const lines = [];
     lines.push("以下のとおり施設安全点検を実施しました。");
     lines.push("");
@@ -478,6 +721,38 @@
 
     lines.push("以上、確認をお願いいたします。");
     return lines.join("\n");
+  }
+
+  function formatTimestamp(date) {
+    const pad = (value) => String(value).padStart(2, "0");
+    return (
+      date.getFullYear().toString() +
+      pad(date.getMonth() + 1) +
+      pad(date.getDate()) +
+      "-" +
+      pad(date.getHours()) +
+      pad(date.getMinutes()) +
+      pad(date.getSeconds())
+    );
+  }
+
+  function downloadTextFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function fallbackCopy(textarea) {
+    textarea.focus();
+    textarea.select();
+    document.execCommand("copy");
+    textarea.setSelectionRange(0, 0);
   }
 
   function setStatusMessage(message, level) {

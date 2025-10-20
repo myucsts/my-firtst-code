@@ -9,7 +9,7 @@
     <header class="page-header">
       <h1>施設安全点検レポート</h1>
       <p>
-        チェックリストに基づいて点検項目を記録し、担当者へメールで共有できるツールです。ブラウザだけで動作します。
+        チェックリストに基づいて点検項目を記録し、結果をコピーして担当者へチャットやメール本文で共有できるツールです。ブラウザだけで動作します。
       </p>
     </header>
 
@@ -55,16 +55,6 @@
               required
             />
           </label>
-          <label>
-            担当者メールアドレス
-            <input
-              id="recipient-email"
-              name="recipientEmail"
-              type="email"
-              placeholder="safety@example.com"
-              required
-            />
-          </label>
           <label class="full-width">
             その他特記事項
             <textarea
@@ -84,24 +74,71 @@
             入力をリセット
           </button>
         </div>
+        <details class="config-details">
+          <summary>チェックリスト設定 (管理者向け)</summary>
+          <p class="config-help">
+            JSON 形式で点検カテゴリと項目を編集できます。保存するとブラウザに設定が記録され、即座に反映されます。
+          </p>
+          <label class="config-textarea-label" for="config-input">チェックリスト定義</label>
+          <textarea
+            id="config-input"
+            class="config-textarea"
+            rows="12"
+            spellcheck="false"
+          ></textarea>
+          <input
+            type="file"
+            id="config-file-input"
+            accept="application/json,.json"
+            hidden
+          />
+          <div class="config-actions">
+            <button type="button" id="apply-config" class="secondary">
+              設定を反映
+            </button>
+            <button type="button" id="reset-config" class="secondary danger">
+              既定のチェックリストに戻す
+            </button>
+            <button type="button" id="export-config" class="secondary">
+              JSON をエクスポート
+            </button>
+            <button type="button" id="import-config" class="secondary">
+              JSON をインポート
+            </button>
+            <button type="button" id="copy-config" class="secondary">
+              JSON をコピー
+            </button>
+          </div>
+        </details>
         <div id="checklist-container" class="checklist"></div>
       </section>
 
       <section class="panel">
         <h2>結果と共有</h2>
         <p class="section-description">
-          「結果を更新」を押すと入力内容を下の要約に反映します。「メールを作成」で既定のメーラーが開きます。
+          「結果を更新」で入力内容を下の要約と報告テキストに反映します。「テキストをコピー」を押すとチャットやメール本文に貼り付けられる形でコピーできます。
         </p>
         <div class="actions">
           <button type="button" id="refresh-summary" class="secondary">
             結果を更新
           </button>
-          <button type="button" id="compose-email" class="primary">
-            メールを作成
+          <button type="button" id="copy-report" class="primary">
+            テキストをコピー
           </button>
         </div>
         <div id="status-message" role="status" aria-live="polite"></div>
         <section id="summary" class="summary" aria-live="polite"></section>
+        <label class="report-preview-label" for="report-text">共有用テキスト</label>
+        <textarea
+          id="report-text"
+          class="report-text"
+          rows="10"
+          readonly
+          aria-describedby="report-text-help"
+        ></textarea>
+        <p id="report-text-help" class="report-text-help">
+          コピー後にチャットやメール本文へ貼り付けて共有してください。
+        </p>
       </section>
     </main>
 

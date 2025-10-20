@@ -104,6 +104,63 @@ textarea {
   margin-bottom: 1.5rem;
 }
 
+.config-details {
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #f8fafc;
+  margin-bottom: 1.25rem;
+}
+
+.config-details summary {
+  font-weight: 700;
+  cursor: pointer;
+  color: #1f2933;
+}
+
+.config-details[open] summary {
+  margin-bottom: 0.75rem;
+}
+
+.config-help {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  color: #475569;
+}
+
+.config-textarea-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: #25313c;
+}
+
+.config-textarea {
+  width: 100%;
+  border: 1px solid #c5ced8;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 12rem;
+}
+
+.config-textarea:focus {
+  border-color: #0563c1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.18);
+}
+
+.config-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .section-description {
   margin: 0 0 1rem;
   color: #4a5563;
@@ -255,6 +312,15 @@ textarea {
   background: #d7dde4;
 }
 
+.secondary.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.secondary.danger:hover {
+  background: #fecaca;
+}
+
 .actions {
   margin-top: 1.25rem;
   display: flex;
@@ -289,6 +355,38 @@ textarea {
   padding: 1rem;
   display: grid;
   gap: 1rem;
+}
+
+.report-preview-label {
+  display: block;
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 600;
+  color: #25313c;
+}
+
+.report-text {
+  width: 100%;
+  border: 1px solid #d7dde4;
+  border-radius: 10px;
+  padding: 1rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  background: #fff;
+  resize: vertical;
+  min-height: 10rem;
+}
+
+.report-text:focus {
+  border-color: #0563c1;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(5, 99, 193, 0.18);
+}
+
+.report-text-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: #64748b;
 }
 
 .summary h3 {
