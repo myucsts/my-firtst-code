@@ -4,6 +4,7 @@
   const TEMPLATE_STORAGE_KEY = "facility-safety-checklist:templates";
   const CURRENT_TEMPLATE_KEY = "facility-safety-checklist:current-template";
   const DEFAULT_TEMPLATE_NAME = "標準テンプレート";
+  const APP_VERSION = "v1.3.0";
   const STATUS_LABELS = {
     ok: "適合",
     attention: "注意",
@@ -116,6 +117,7 @@
   const applyConfigButton = document.getElementById("apply-config");
   const resetConfigButton = document.getElementById("reset-config");
   const copyConfigButton = document.getElementById("copy-config");
+  const appVersionElement = document.getElementById("app-version");
 
   const formFields = {
     facilityLocation: document.getElementById("facility-location"),
@@ -166,6 +168,7 @@
     initTemplateControls();
     initConfigEditor();
     renderAreas();
+    displayAppVersion();
     attachEventHandlers();
     setupStatePersistenceGuards();
     updateSummary();
@@ -730,6 +733,12 @@
         flushPendingStateSave();
       }
     });
+  }
+
+  function displayAppVersion() {
+    if (!appVersionElement) return;
+    appVersionElement.textContent = APP_VERSION;
+    appVersionElement.setAttribute("title", `バージョン: ${APP_VERSION}`);
   }
 
   function renderAreas() {

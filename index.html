@@ -7,7 +7,10 @@
   </head>
   <body>
     <header class="page-header">
-      <h1>施設安全点検レポート</h1>
+      <div class="header-top">
+        <h1>施設安全点検レポート</h1>
+        <span id="app-version" class="app-version" aria-label="バージョン"></span>
+      </div>
       <p>
         チェックリストに基づいて点検項目を記録し、結果をコピーして担当者へチャットやメール本文で共有できるツールです。ブラウザだけで動作します。
       </p>
@@ -34,21 +37,24 @@
               name="facilityLocation"
               type="text"
               placeholder="東京都千代田区..."
-            />
-          </label>
-          <label>
-            点検日
-            <input
-              id="inspection-date"
-              name="inspectionDate"
-              type="date"
-              required
-            />
-          </label>
-          <label>
-            点検者
-            <input
-              id="inspector-name"
+          />
+        </label>
+        <label>
+          点検日
+          <input
+            id="inspection-date"
+            name="inspectionDate"
+            type="date"
+            required
+          />
+          <span class="field-note">
+            点検日を変更すると入力済みのチェック項目はすべてリセットされます。
+          </span>
+        </label>
+        <label>
+          点検者
+          <input
+            id="inspector-name"
               name="inspectorName"
               type="text"
               placeholder="山田 太郎"
