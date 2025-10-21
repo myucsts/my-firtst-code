@@ -5,14 +5,14 @@
   const CURRENT_TEMPLATE_KEY = "facility-safety-checklist:current-template";
   const DEFAULT_TEMPLATE_NAME = "標準テンプレート";
   const STATUS_LABELS = {
-    ok: "良好",
-    attention: "要確認",
-    issue: "対応希望",
+    ok: "問題なし",
+    attention: "注意事項あり",
+    issue: "要対応",
   };
   const STATUS_ORDER = ["ok", "attention", "issue"];
   const ISSUE_STATUS = "issue";
   const ISSUE_NOTE_REQUIRED_MESSAGE =
-    "対応希望を選択した場合はコメントをご記入ください。";
+    "要対応を選択した場合はコメントをご記入ください。";
 
   const DEFAULT_CHECKLIST_SECTIONS = [
     {
@@ -1440,7 +1440,7 @@
     );
     if (missingNote) {
       if (showStatusMessages) {
-        setStatusMessage("対応希望を選択した項目にはコメントを入力してください。", "error");
+        setStatusMessage("要対応を選択した項目にはコメントを入力してください。", "error");
       }
       if (focusOnError) {
         focusIssueNoteField(missingNote.areaId, missingNote.id);
@@ -1569,9 +1569,9 @@
         </p>
         <p>点検箇所: ${escapeHtml(areaNames)}</p>
         <p>
-          良好: ${counts.ok ?? 0} 件 /
-          要確認: ${counts.attention ?? 0} 件 /
-          対応希望: ${counts.issue ?? 0} 件 /
+          問題なし: ${counts.ok ?? 0} 件 /
+          注意事項あり: ${counts.attention ?? 0} 件 /
+          要対応: ${counts.issue ?? 0} 件 /
           記録件数: ${total} 件
         </p>
         ${
