@@ -163,14 +163,23 @@
       </section>
     </main>
 
-    <button
-      type="button"
-      id="jump-to-checklist"
-      class="floating-shortcut"
-      aria-label="点検項目へ移動"
-    >
-      点検項目へ
-    </button>
+    <div id="checklist-shortcut" class="floating-shortcut" hidden>
+      <button
+        type="button"
+        id="jump-to-checklist"
+        class="floating-shortcut__trigger"
+        aria-expanded="false"
+        aria-controls="jump-to-checklist-menu"
+      >
+        点検項目へ
+      </button>
+      <div
+        id="jump-to-checklist-menu"
+        class="floating-shortcut__menu"
+        role="menu"
+        hidden
+      ></div>
+    </div>
 
     <footer class="page-footer">
       <p>

@@ -117,7 +117,9 @@
   const resetConfigButton = document.getElementById("reset-config");
   const copyConfigButton = document.getElementById("copy-config");
   const appVersionElement = document.getElementById("app-version");
+  const jumpToChecklistWrapper = document.getElementById("checklist-shortcut");
   const jumpToChecklistButton = document.getElementById("jump-to-checklist");
+  const jumpToChecklistMenu = document.getElementById("jump-to-checklist-menu");
 
   const formFields = {
     facilityLocation: document.getElementById("facility-location"),
@@ -150,6 +152,7 @@
   let saveStateTimer = null;
   let isStateDirty = false;
   let jumpHighlightTimer = null;
+  let isShortcutMenuOpen = false;
 
   init();
 
@@ -725,7 +728,7 @@
       addAreaButton.addEventListener("click", handleAddArea);
     }
     if (jumpToChecklistButton) {
-      jumpToChecklistButton.addEventListener("click", handleJumpToChecklist);
+      jumpToChecklistButton.addEventListener("click", handleChecklistShortcutToggle);
     }
   }
 
@@ -740,21 +743,22 @@
   }
 
   function updateChecklistShortcutState() {
-    if (!jumpToChecklistButton) return;
+    if (!jumpToChecklistWrapper || !jumpToChecklistButton) return;
     const hasAreas = Array.isArray(state.areas) && state.areas.length > 0;
     if (!hasAreas) {
-      jumpToChecklistButton.hidden = true;
-      jumpToChecklistButton.setAttribute("aria-hidden", "true");
-      jumpToChecklistButton.setAttribute("tabindex", "-1");
+      closeChecklistShortcutMenu({ silent: true });
+      jumpToChecklistWrapper.hidden = true;
+      jumpToChecklistButton.setAttribute("aria-expanded", "false");
       jumpToChecklistButton.textContent = "点検項目へ";
       jumpToChecklistButton.removeAttribute("title");
       jumpToChecklistButton.removeAttribute("aria-label");
       return;
     }
 
-    jumpToChecklistButton.hidden = false;
-    jumpToChecklistButton.setAttribute("aria-hidden", "false");
+    jumpToChecklistWrapper.hidden = false;
+    jumpToChecklistButton.removeAttribute("aria-hidden");
     jumpToChecklistButton.removeAttribute("tabindex");
+    jumpToChecklistButton.setAttribute("aria-expanded", isShortcutMenuOpen ? "true" : "false");
     jumpToChecklistButton.textContent = "点検項目へ";
 
     const areaIndex = state.areas.findIndex((area) => area.id === activeAreaId);
@@ -762,26 +766,144 @@
     const activeArea = state.areas[resolvedIndex];
     if (activeArea) {
       const areaLabel = getAreaDisplayName(activeArea, resolvedIndex);
-      const descriptiveLabel = `${areaLabel}の点検項目へ移動`;
+      const descriptiveLabel = `${areaLabel}の点検項目一覧`;
       jumpToChecklistButton.setAttribute("aria-label", descriptiveLabel);
       jumpToChecklistButton.setAttribute("title", descriptiveLabel);
     } else {
+      jumpToChecklistButton.setAttribute("aria-label", "点検項目一覧を開く");
       jumpToChecklistButton.removeAttribute("title");
-      jumpToChecklistButton.setAttribute("aria-label", "点検項目へ移動");
     }
+
+    renderChecklistShortcutMenu();
   }
 
-  function handleJumpToChecklist(event) {
+  function handleChecklistShortcutToggle(event) {
     event?.preventDefault?.();
-    if (scrollActiveAreaIntoView({ highlight: true })) {
+    if (isShortcutMenuOpen) {
+      closeChecklistShortcutMenu();
       return;
     }
-    if (areasContainer) {
-      areasContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!Array.isArray(state.areas) || state.areas.length === 0) {
+      return;
+    }
+    openChecklistShortcutMenu();
+  }
+
+  function openChecklistShortcutMenu() {
+    if (!jumpToChecklistWrapper || !jumpToChecklistMenu || !jumpToChecklistButton) {
+      return;
+    }
+    if (isShortcutMenuOpen) {
+      return;
+    }
+    isShortcutMenuOpen = true;
+    jumpToChecklistWrapper.classList.add("is-open");
+    jumpToChecklistMenu.hidden = false;
+    jumpToChecklistButton.setAttribute("aria-expanded", "true");
+    renderChecklistShortcutMenu();
+    document.addEventListener("click", handleShortcutOutsideClick);
+    document.addEventListener("keydown", handleShortcutKeydown);
+  }
+
+  function closeChecklistShortcutMenu({ silent = false } = {}) {
+    if (!isShortcutMenuOpen) {
+      return;
+    }
+    isShortcutMenuOpen = false;
+    if (jumpToChecklistWrapper) {
+      jumpToChecklistWrapper.classList.remove("is-open");
+    }
+    if (jumpToChecklistMenu) {
+      jumpToChecklistMenu.hidden = true;
+    }
+    if (jumpToChecklistButton) {
+      jumpToChecklistButton.setAttribute("aria-expanded", "false");
+      if (!silent) {
+        jumpToChecklistButton.focus();
+      }
+    }
+    document.removeEventListener("click", handleShortcutOutsideClick);
+    document.removeEventListener("keydown", handleShortcutKeydown);
+  }
+
+  function renderChecklistShortcutMenu() {
+    if (!jumpToChecklistMenu || !Array.isArray(state.areas)) {
+      return;
+    }
+    const previouslyFocusedId =
+      isShortcutMenuOpen &&
+      jumpToChecklistMenu.contains(document.activeElement) &&
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement.dataset.areaId || null
+        : null;
+
+    jumpToChecklistMenu.innerHTML = "";
+
+    if (state.areas.length === 0) {
+      return;
+    }
+
+    state.areas.forEach((area, index) => {
+      const label = getAreaDisplayName(area, index);
+      const itemButton = document.createElement("button");
+      itemButton.type = "button";
+      itemButton.className = "floating-shortcut__item";
+      itemButton.dataset.areaId = area.id;
+      itemButton.textContent = label;
+      itemButton.setAttribute("role", "menuitem");
+      if (area.id === activeAreaId) {
+        itemButton.classList.add("is-active");
+      }
+      itemButton.addEventListener("click", () => {
+        handleShortcutItemSelect(area.id);
+      });
+      jumpToChecklistMenu.appendChild(itemButton);
+    });
+
+    if (isShortcutMenuOpen) {
+      requestAnimationFrame(() => {
+        const focusTargetId = previouslyFocusedId || activeAreaId;
+        if (!jumpToChecklistMenu) return;
+        const focusTarget =
+          (focusTargetId &&
+            jumpToChecklistMenu.querySelector(
+              `.floating-shortcut__item[data-area-id="${focusTargetId}"]`
+            )) ||
+          jumpToChecklistMenu.querySelector(".floating-shortcut__item");
+        if (focusTarget instanceof HTMLElement) {
+          focusTarget.focus();
+        }
+      });
     }
   }
 
-  function scrollActiveAreaIntoView({ highlight = false } = {}) {
+  function handleShortcutItemSelect(areaId) {
+    closeChecklistShortcutMenu({ silent: true });
+    if (!state.areas.some((area) => area.id === areaId)) {
+      return;
+    }
+    setActiveArea(areaId, { scrollPanel: false });
+    scrollActiveAreaIntoView({ highlight: true });
+  }
+
+  function handleShortcutOutsideClick(event) {
+    if (!jumpToChecklistWrapper || !isShortcutMenuOpen) return;
+    if (!(event.target instanceof Node)) {
+      return;
+    }
+    if (!jumpToChecklistWrapper.contains(event.target)) {
+      closeChecklistShortcutMenu({ silent: true });
+    }
+  }
+
+  function handleShortcutKeydown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeChecklistShortcutMenu();
+    }
+  }
+
+  function scrollActiveAreaIntoView({ highlight = false, skipScroll = false } = {}) {
     if (!areasContainer) return false;
     const activePanel =
       areasContainer.querySelector(".area-card.is-active") ||
@@ -789,7 +911,9 @@
     if (!activePanel) {
       return false;
     }
-    activePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!skipScroll) {
+      activePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     if (highlight) {
       activePanel.classList.add("is-jump-highlight");
       if (jumpHighlightTimer) {
@@ -948,16 +1072,16 @@
     updateChecklistShortcutState();
   }
 
-  function setActiveArea(areaId, { focusTab = false } = {}) {
+  function setActiveArea(areaId, { focusTab = false, scrollPanel = true } = {}) {
     if (!areaId) return;
     const exists = state.areas.some((area) => area.id === areaId);
     if (!exists) return;
     if (activeAreaId === areaId) {
-      updateActiveAreaVisualState({ focusTab, scrollPanel: true });
+      updateActiveAreaVisualState({ focusTab, scrollPanel });
       return;
     }
     activeAreaId = areaId;
-    updateActiveAreaVisualState({ focusTab, scrollPanel: true });
+    updateActiveAreaVisualState({ focusTab, scrollPanel });
     saveState();
   }
 
