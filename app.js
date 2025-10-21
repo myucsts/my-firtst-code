@@ -6,9 +6,9 @@
   const DEFAULT_TEMPLATE_NAME = "標準テンプレート";
   const APP_VERSION = "v1.3.0";
   const STATUS_LABELS = {
-    ok: "適合",
-    attention: "注意",
-    issue: "不適合",
+    ok: "良好",
+    attention: "要確認",
+    issue: "対応希望",
   };
   const STATUS_ORDER = ["ok", "attention", "issue"];
 
@@ -1267,9 +1267,9 @@
         </p>
         <p>点検箇所: ${escapeHtml(areaNames)}</p>
         <p>
-          適合: ${counts.ok ?? 0} 件 /
-          注意: ${counts.attention ?? 0} 件 /
-          不適合: ${counts.issue ?? 0} 件 /
+          良好: ${counts.ok ?? 0} 件 /
+          要確認: ${counts.attention ?? 0} 件 /
+          対応希望: ${counts.issue ?? 0} 件 /
           記録件数: ${total} 件
         </p>
         ${
