@@ -4,7 +4,6 @@
   const TEMPLATE_STORAGE_KEY = "facility-safety-checklist:templates";
   const CURRENT_TEMPLATE_KEY = "facility-safety-checklist:current-template";
   const DEFAULT_TEMPLATE_NAME = "標準テンプレート";
-  const APP_VERSION = "v1.3.0";
   const STATUS_LABELS = {
     ok: "良好",
     attention: "要確認",
@@ -737,8 +736,30 @@
 
   function displayAppVersion() {
     if (!appVersionElement) return;
-    appVersionElement.textContent = APP_VERSION;
-    appVersionElement.setAttribute("title", `バージョン: ${APP_VERSION}`);
+    const versionLabel = buildVersionLabel();
+    if (!versionLabel) {
+      appVersionElement.textContent = "";
+      appVersionElement.removeAttribute("title");
+      return;
+    }
+    appVersionElement.textContent = versionLabel;
+    appVersionElement.setAttribute("title", `最終更新: ${versionLabel}`);
+  }
+
+  function buildVersionLabel() {
+    const lastModified = document.lastModified;
+    if (!lastModified) return "";
+    const modifiedDate = new Date(lastModified);
+    if (Number.isNaN(modifiedDate.getTime())) {
+      return lastModified;
+    }
+    const twoDigits = (value) => String(value).padStart(2, "0");
+    const year = modifiedDate.getFullYear();
+    const month = twoDigits(modifiedDate.getMonth() + 1);
+    const day = twoDigits(modifiedDate.getDate());
+    const hours = twoDigits(modifiedDate.getHours());
+    const minutes = twoDigits(modifiedDate.getMinutes());
+    return `build ${year}.${month}.${day}-${hours}${minutes}`;
   }
 
   function renderAreas() {
