@@ -141,6 +141,7 @@
     areas: [],
   };
 
+  let lastInspectionDateValue = "";
   let activeAreaId = null;
 
   const SAVE_STATE_DEBOUNCE_MS = 200;
@@ -155,6 +156,7 @@
     saveCurrentTemplateName(currentTemplateName);
     checklistSections = loadChecklistConfig();
     loadState();
+    lastInspectionDateValue = state.form.inspectionDate || "";
     ensureAreas();
     pruneAreasForTemplate();
     if (!activeAreaId || !state.areas.some((area) => area.id === activeAreaId)) {
@@ -669,13 +671,26 @@
         saveState();
         updateSummary();
       });
+      if (key === "inspectionDate") {
+        element.addEventListener("change", () => {
+          handleInspectionDateChange(element.value);
+        });
+      }
     });
 
     if (!state.form.inspectionDate) {
       const today = new Date().toISOString().slice(0, 10);
-      formFields.inspectionDate.value = today;
+      if (formFields.inspectionDate) {
+        formFields.inspectionDate.value = today;
+      }
       state.form.inspectionDate = today;
+      lastInspectionDateValue = today;
       saveState();
+    } else {
+      lastInspectionDateValue =
+        (formFields.inspectionDate && formFields.inspectionDate.value) ||
+        state.form.inspectionDate ||
+        "";
     }
   }
 
@@ -1044,9 +1059,16 @@
     setStatusMessage("点検箇所を削除しました。", "info");
   }
 
-  function handleReset() {
-    const confirmed = window.confirm("すべての点検項目をリセットしますか？");
-    if (!confirmed) return;
+  function handleReset(event) {
+    event?.preventDefault?.();
+    resetAllAreas();
+  }
+
+  function resetAllAreas({ skipConfirm = false, statusMessage } = {}) {
+    if (!skipConfirm) {
+      const confirmed = window.confirm("すべての点検項目をリセットしますか？");
+      if (!confirmed) return;
+    }
     state.areas = state.areas.map((area) => ({
       ...area,
       items: {},
@@ -1054,7 +1076,41 @@
     saveState();
     renderAreas();
     updateSummary();
-    setStatusMessage("チェック項目をリセットしました。", "info");
+    setStatusMessage(
+      statusMessage || "チェック項目をリセットしました。",
+      "info"
+    );
+  }
+
+  function handleInspectionDateChange(nextValue) {
+    const newDate = nextValue || "";
+    const previousDate = lastInspectionDateValue || "";
+    if (newDate === previousDate) {
+      return;
+    }
+
+    const hadPreviousDate = Boolean(previousDate);
+    lastInspectionDateValue = newDate;
+
+    if (!hadPreviousDate || !newDate) {
+      return;
+    }
+
+    if (!hasAnyRecordedItems()) {
+      return;
+    }
+
+    resetAllAreas({
+      skipConfirm: true,
+      statusMessage:
+        "点検日が変更されたため、すべてのチェック項目をリセットしました。",
+    });
+  }
+
+  function hasAnyRecordedItems() {
+    return state.areas.some(
+      (area) => area.items && Object.keys(area.items).length > 0
+    );
   }
 
   function pruneAreasForTemplate() {
