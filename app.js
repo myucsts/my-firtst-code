@@ -117,6 +117,7 @@
   const resetConfigButton = document.getElementById("reset-config");
   const copyConfigButton = document.getElementById("copy-config");
   const appVersionElement = document.getElementById("app-version");
+  const jumpToChecklistButton = document.getElementById("jump-to-checklist");
 
   const formFields = {
     facilityLocation: document.getElementById("facility-location"),
@@ -148,6 +149,7 @@
   const SAVE_STATE_DEBOUNCE_MS = 200;
   let saveStateTimer = null;
   let isStateDirty = false;
+  let jumpHighlightTimer = null;
 
   init();
 
@@ -722,6 +724,9 @@
     if (addAreaButton) {
       addAreaButton.addEventListener("click", handleAddArea);
     }
+    if (jumpToChecklistButton) {
+      jumpToChecklistButton.addEventListener("click", handleJumpToChecklist);
+    }
   }
 
   function setupStatePersistenceGuards() {
@@ -732,6 +737,69 @@
         flushPendingStateSave();
       }
     });
+  }
+
+  function updateChecklistShortcutState() {
+    if (!jumpToChecklistButton) return;
+    const hasAreas = Array.isArray(state.areas) && state.areas.length > 0;
+    if (!hasAreas) {
+      jumpToChecklistButton.hidden = true;
+      jumpToChecklistButton.setAttribute("aria-hidden", "true");
+      jumpToChecklistButton.setAttribute("tabindex", "-1");
+      jumpToChecklistButton.textContent = "点検項目へ";
+      jumpToChecklistButton.removeAttribute("title");
+      jumpToChecklistButton.removeAttribute("aria-label");
+      return;
+    }
+
+    jumpToChecklistButton.hidden = false;
+    jumpToChecklistButton.setAttribute("aria-hidden", "false");
+    jumpToChecklistButton.removeAttribute("tabindex");
+    jumpToChecklistButton.textContent = "点検項目へ";
+
+    const areaIndex = state.areas.findIndex((area) => area.id === activeAreaId);
+    const resolvedIndex = areaIndex >= 0 ? areaIndex : 0;
+    const activeArea = state.areas[resolvedIndex];
+    if (activeArea) {
+      const areaLabel = getAreaDisplayName(activeArea, resolvedIndex);
+      const descriptiveLabel = `${areaLabel}の点検項目へ移動`;
+      jumpToChecklistButton.setAttribute("aria-label", descriptiveLabel);
+      jumpToChecklistButton.setAttribute("title", descriptiveLabel);
+    } else {
+      jumpToChecklistButton.removeAttribute("title");
+      jumpToChecklistButton.setAttribute("aria-label", "点検項目へ移動");
+    }
+  }
+
+  function handleJumpToChecklist(event) {
+    event?.preventDefault?.();
+    if (scrollActiveAreaIntoView({ highlight: true })) {
+      return;
+    }
+    if (areasContainer) {
+      areasContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function scrollActiveAreaIntoView({ highlight = false } = {}) {
+    if (!areasContainer) return false;
+    const activePanel =
+      areasContainer.querySelector(".area-card.is-active") ||
+      areasContainer.querySelector(".area-card");
+    if (!activePanel) {
+      return false;
+    }
+    activePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (highlight) {
+      activePanel.classList.add("is-jump-highlight");
+      if (jumpHighlightTimer) {
+        window.clearTimeout(jumpHighlightTimer);
+      }
+      jumpHighlightTimer = window.setTimeout(() => {
+        activePanel.classList.remove("is-jump-highlight");
+      }, 1200);
+    }
+    return true;
   }
 
   function displayAppVersion() {
@@ -767,6 +835,7 @@
     areasContainer.innerHTML = "";
 
     if (state.areas.length === 0) {
+      updateChecklistShortcutState();
       return;
     }
 
@@ -876,6 +945,7 @@
     areasContainer.appendChild(tabList);
     areasContainer.appendChild(panels);
     updateActiveAreaVisualState();
+    updateChecklistShortcutState();
   }
 
   function setActiveArea(areaId, { focusTab = false } = {}) {
@@ -924,6 +994,8 @@
     if (focusTab && activeTabElement) {
       activeTabElement.focus();
     }
+
+    updateChecklistShortcutState();
   }
 
   function getAreaDisplayName(area, index) {
@@ -1021,6 +1093,7 @@
     saveState();
     updateSummary();
     refreshAreaTabLabel(areaId);
+    updateChecklistShortcutState();
   }
 
   function updateAreaNotes(areaId, value) {
