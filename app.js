@@ -10,6 +10,9 @@
     issue: "対応希望",
   };
   const STATUS_ORDER = ["ok", "attention", "issue"];
+  const ISSUE_STATUS = "issue";
+  const ISSUE_NOTE_REQUIRED_MESSAGE =
+    "対応希望を選択した場合はコメントをご記入ください。";
 
   const DEFAULT_CHECKLIST_SECTIONS = [
     {
@@ -122,7 +125,6 @@
   const jumpToChecklistMenu = document.getElementById("jump-to-checklist-menu");
 
   const formFields = {
-    facilityLocation: document.getElementById("facility-location"),
     inspectionDate: document.getElementById("inspection-date"),
     inspectorName: document.getElementById("inspector-name"),
     globalNotes: document.getElementById("global-notes"),
@@ -137,7 +139,6 @@
 
   let state = {
     form: {
-      facilityLocation: "",
       inspectionDate: "",
       inspectorName: "",
       globalNotes: "",
@@ -188,6 +189,9 @@
             legacySingleAreaName = saved.form.inspectionArea;
             delete state.form.inspectionArea;
           }
+          if (Object.prototype.hasOwnProperty.call(state.form, "facilityLocation")) {
+            delete state.form.facilityLocation;
+          }
         }
         if (Array.isArray(saved.areas)) {
           state.areas = saved.areas
@@ -221,10 +225,7 @@
       state.areas = [];
     }
     if (state.areas.length === 0) {
-      const name =
-        legacySingleAreaName ||
-        state.form.facilityLocation ||
-        "点検箇所1";
+      const name = legacySingleAreaName || "点検箇所1";
       const area = createArea(name);
       if (legacySingleAreaItems) {
         area.items = { ...legacySingleAreaItems };
@@ -1169,6 +1170,18 @@
       const statusContainer = document.createElement("div");
       statusContainer.className = "status-options";
 
+      const note = document.createElement("textarea");
+      note.className = "note-input";
+      note.placeholder = item.notePlaceholder || "気づいた点を記入";
+      note.value = itemState.note || "";
+      note.dataset.areaId = area.id;
+      note.dataset.itemId = item.id;
+      note.addEventListener("input", () => {
+        updateAreaItemState(area.id, item.id, { note: note.value });
+        const currentStatus = getItemStatus(area.id, item.id);
+        refreshIssueNoteState(note, currentStatus);
+      });
+
       STATUS_ORDER.forEach((statusKey) => {
         const label = document.createElement("label");
         label.dataset.status = statusKey;
@@ -1182,6 +1195,7 @@
         input.addEventListener("change", () => {
           updateAreaItemState(area.id, item.id, { status: input.value });
           highlightActiveStatus(statusContainer, input.value);
+          refreshIssueNoteState(note, input.value);
         });
 
         label.appendChild(input);
@@ -1194,15 +1208,7 @@
 
       header.appendChild(statusContainer);
       itemEl.appendChild(header);
-
-      const note = document.createElement("textarea");
-      note.className = "note-input";
-      note.placeholder = item.notePlaceholder || "気づいた点を記入";
-      note.value = itemState.note || "";
-      note.addEventListener("input", () => {
-        updateAreaItemState(area.id, item.id, { note: note.value });
-      });
-
+      refreshIssueNoteState(note, itemState.status);
       itemEl.appendChild(note);
       sectionEl.appendChild(itemEl);
     });
@@ -1371,6 +1377,15 @@
     const items = getCompletedItems();
     if (items.length === 0) {
       setStatusMessage("各点検箇所のステータスを入力してください。", "error");
+      return;
+    }
+
+    const missingNote = items.find(
+      (item) => item.status === ISSUE_STATUS && (!item.note || item.note.trim() === "")
+    );
+    if (missingNote) {
+      setStatusMessage("対応希望を選択した項目にはコメントを入力してください。", "error");
+      focusIssueNoteField(missingNote.areaId, missingNote.id);
       return;
     }
 
@@ -1608,6 +1623,53 @@
     }));
   }
 
+  function getItemStatus(areaId, itemId) {
+    const area = state.areas.find((entry) => entry.id === areaId);
+    if (!area || !area.items) {
+      return "";
+    }
+    const itemState = area.items[itemId];
+    if (!itemState) {
+      return "";
+    }
+    return itemState.status || "";
+  }
+
+  function refreshIssueNoteState(noteElement, status) {
+    if (!noteElement) return;
+    const isIssue = status === ISSUE_STATUS;
+    noteElement.required = isIssue;
+    if (!isIssue) {
+      noteElement.classList.remove("is-required");
+      noteElement.setCustomValidity("");
+      return;
+    }
+    const needsComment = noteElement.value.trim() === "";
+    noteElement.classList.toggle("is-required", needsComment);
+    noteElement.setCustomValidity(needsComment ? ISSUE_NOTE_REQUIRED_MESSAGE : "");
+  }
+
+  function focusIssueNoteField(areaId, itemId) {
+    if (!areasContainer) return;
+    setActiveArea(areaId, { scrollPanel: true });
+    requestAnimationFrame(() => {
+      const selector = `[data-area-id="${areaId}"] .checklist-item[data-item-id="${itemId}"] .note-input`;
+      const noteElement = areasContainer.querySelector(selector);
+      if (!noteElement) return;
+      refreshIssueNoteState(noteElement, ISSUE_STATUS);
+      if (typeof noteElement.focus === "function") {
+        try {
+          noteElement.focus({ preventScroll: true });
+        } catch (error) {
+          noteElement.focus();
+        }
+      }
+      if (typeof noteElement.reportValidity === "function") {
+        noteElement.reportValidity();
+      }
+    });
+  }
+
   function formatDate(value) {
     if (!value) return "未入力";
     const date = new Date(value);
@@ -1661,7 +1723,6 @@
     const headers = [
       "点検日",
       "点検者",
-      "施設所在地",
       "点検箇所",
       "箇所メモ",
       "カテゴリ",
@@ -1679,7 +1740,6 @@
     const groupedByArea = areaMap || groupItemsByArea(items);
     const inspectionDate = formatDateForCsv(state.form.inspectionDate);
     const inspectorName = state.form.inspectorName || "";
-    const facilityLocation = state.form.facilityLocation || "";
     const globalNotes = state.form.globalNotes || "";
     const generatedAt = formatDateTimeForCsv(new Date());
 
@@ -1694,7 +1754,6 @@
         const row = [
           inspectionDate,
           inspectorName,
-          facilityLocation,
           areaName,
           areaNotes,
           item.section,
