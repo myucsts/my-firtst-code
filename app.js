@@ -704,7 +704,11 @@
 
   function attachEventHandlers() {
     refreshSummaryButton.addEventListener("click", () => {
-      updateSummary();
+      const validation = validateReport({ focusOnError: true });
+      if (!validation.ok) {
+        return;
+      }
+      updateSummary(validation.items);
       setStatusMessage("要約を更新しました。", "info");
     });
 
@@ -1368,28 +1372,48 @@
     return ids;
   }
 
-  async function handleCopyReport() {
-    if (!form.reportValidity()) {
-      setStatusMessage("必須項目を入力してください。", "error");
-      return;
+  function validateReport({ focusOnError = true, showStatusMessages = true } = {}) {
+    if (form && typeof form.reportValidity === "function") {
+      if (!form.reportValidity()) {
+        if (showStatusMessages) {
+          setStatusMessage("必須項目を入力してください。", "error");
+        }
+        return { ok: false, items: [] };
+      }
     }
 
     const items = getCompletedItems();
     if (items.length === 0) {
-      setStatusMessage("各点検箇所のステータスを入力してください。", "error");
-      return;
+      if (showStatusMessages) {
+        setStatusMessage("各点検箇所のステータスを入力してください。", "error");
+      }
+      return { ok: false, items };
     }
 
     const missingNote = items.find(
       (item) => item.status === ISSUE_STATUS && (!item.note || item.note.trim() === "")
     );
     if (missingNote) {
-      setStatusMessage("対応希望を選択した項目にはコメントを入力してください。", "error");
-      focusIssueNoteField(missingNote.areaId, missingNote.id);
+      if (showStatusMessages) {
+        setStatusMessage("対応希望を選択した項目にはコメントを入力してください。", "error");
+      }
+      if (focusOnError) {
+        focusIssueNoteField(missingNote.areaId, missingNote.id);
+      }
+      return { ok: false, items };
+    }
+
+    return { ok: true, items };
+  }
+
+  async function handleCopyReport() {
+    const validation = validateReport({ focusOnError: true });
+    if (!validation.ok) {
       return;
     }
 
-    updateSummary();
+    const items = validation.items;
+    updateSummary(items);
 
     const reportText = reportTextArea.value;
     try {
@@ -1476,8 +1500,8 @@
     return results;
   }
 
-  function updateSummary() {
-    const items = getCompletedItems();
+  function updateSummary(precomputedItems = null) {
+    const items = Array.isArray(precomputedItems) ? precomputedItems : getCompletedItems();
     if (items.length === 0) {
       summarySection.innerHTML =
         '<div class="empty-state">各点検箇所のチェックを入力すると結果が表示されます。</div>';
