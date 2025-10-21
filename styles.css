@@ -81,11 +81,21 @@ textarea {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.form-grid label {
+.form-grid label,
+.form-grid .form-field {
   display: grid;
   gap: 0.4rem;
   font-weight: 600;
   color: #25313c;
+}
+
+.form-grid .form-field label {
+  font-weight: 600;
+}
+
+.form-grid .field-control {
+  display: grid;
+  gap: 0.35rem;
 }
 
 .field-note {
@@ -93,6 +103,8 @@ textarea {
   font-size: 0.85rem;
   color: #64748b;
   font-weight: 400;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .form-grid input,

@@ -37,24 +37,26 @@
               name="facilityLocation"
               type="text"
               placeholder="東京都千代田区..."
-          />
-        </label>
-        <label>
-          点検日
-          <input
-            id="inspection-date"
-            name="inspectionDate"
-            type="date"
-            required
-          />
-          <span class="field-note">
-            点検日を変更すると入力済みのチェック項目はすべてリセットされます。
-          </span>
-        </label>
-        <label>
-          点検者
-          <input
-            id="inspector-name"
+            />
+          </label>
+          <div class="form-field">
+            <label for="inspection-date">点検日</label>
+            <div class="field-control">
+              <input
+                id="inspection-date"
+                name="inspectionDate"
+                type="date"
+                required
+              />
+              <p class="field-note" role="note">
+                点検日を変更すると入力済みのチェック項目はすべてリセットされます。
+              </p>
+            </div>
+          </div>
+          <label>
+            点検者
+            <input
+              id="inspector-name"
               name="inspectorName"
               type="text"
               placeholder="山田 太郎"
