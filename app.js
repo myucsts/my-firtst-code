@@ -1372,6 +1372,35 @@
     return ids;
   }
 
+  function findFirstIncompleteChecklistItem() {
+    if (!Array.isArray(state.areas) || state.areas.length === 0) {
+      return null;
+    }
+    for (let areaIndex = 0; areaIndex < state.areas.length; areaIndex += 1) {
+      const area = state.areas[areaIndex];
+      const areaItems = area.items || {};
+      for (const section of checklistSections) {
+        if (!section || !Array.isArray(section.items)) {
+          continue;
+        }
+        for (const item of section.items) {
+          const itemState = areaItems[item.id];
+          if (!itemState || !itemState.status) {
+            return {
+              area,
+              areaId: area.id,
+              areaIndex,
+              itemId: item.id,
+              itemTitle: item.title,
+              sectionTitle: section.title,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   function validateReport({ focusOnError = true, showStatusMessages = true } = {}) {
     if (form && typeof form.reportValidity === "function") {
       if (!form.reportValidity()) {
@@ -1386,6 +1415,22 @@
     if (items.length === 0) {
       if (showStatusMessages) {
         setStatusMessage("各点検箇所のステータスを入力してください。", "error");
+      }
+      return { ok: false, items };
+    }
+
+    const incompleteItem = findFirstIncompleteChecklistItem();
+    if (incompleteItem) {
+      if (showStatusMessages) {
+        const areaName = getAreaDisplayName(incompleteItem.area, incompleteItem.areaIndex);
+        const locationLabel = `${incompleteItem.sectionTitle}／${incompleteItem.itemTitle}`;
+        setStatusMessage(
+          `点検箇所「${areaName}」の「${locationLabel}」のステータスを選択してください。`,
+          "error"
+        );
+      }
+      if (focusOnError) {
+        focusChecklistStatusField(incompleteItem.areaId, incompleteItem.itemId);
       }
       return { ok: false, items };
     }
@@ -1690,6 +1735,23 @@
       }
       if (typeof noteElement.reportValidity === "function") {
         noteElement.reportValidity();
+      }
+    });
+  }
+
+  function focusChecklistStatusField(areaId, itemId) {
+    if (!areasContainer) return;
+    setActiveArea(areaId, { scrollPanel: true });
+    requestAnimationFrame(() => {
+      const selector = `[data-area-id="${areaId}"] .checklist-item[data-item-id="${itemId}"] input[type="radio"]`;
+      const target = areasContainer.querySelector(selector);
+      if (!target || typeof target.focus !== "function") {
+        return;
+      }
+      try {
+        target.focus({ preventScroll: true });
+      } catch (error) {
+        target.focus();
       }
     });
   }
