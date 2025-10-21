@@ -1618,6 +1618,35 @@
     )}月${String(date.getDate()).padStart(2, "0")}日`;
   }
 
+  function formatDateForCsv(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function formatDateTimeForCsv(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  }
+
+  function toCsvValue(input) {
+    if (input === null || input === undefined) return "";
+    const value = String(input);
+    if (value === "") return "";
+    const escaped = value.replace(/"/g, '""');
+    return /[",\n\r]/.test(escaped) ? `"${escaped}"` : escaped;
+  }
   function escapeHtml(value) {
     const safe = value ?? "";
     return String(safe)
@@ -1629,53 +1658,57 @@
   }
 
   function buildReportText(items, areaMap = null) {
-    const lines = [];
-    lines.push("以下のとおり施設安全点検を実施しました。");
-    lines.push("");
-    lines.push(
-      `点検箇所数: ${state.areas.length} / ${state.areas
-        .map((area, index) => area.name || `点検箇所${index + 1}`)
-        .join("、") || "未入力"}`
-    );
-    lines.push(`所在地: ${state.form.facilityLocation || "未入力"}`);
-    lines.push(`点検日: ${formatDate(state.form.inspectionDate)}`);
-    lines.push(`点検者: ${state.form.inspectorName || "未入力"}`);
-    lines.push("");
-    lines.push("■ 点検結果");
-
-    const groupedByArea = areaMap || groupItemsByArea(items);
-    state.areas.forEach((area, index) => {
-      const areaItems = groupedByArea.get(area.id) || [];
-      lines.push(`【${area.name || `点検箇所${index + 1}`}】`);
-      if (area.notes) {
-        lines.push(`・箇所メモ: ${area.notes}`);
-      }
-      if (areaItems.length === 0) {
-        lines.push("・チェック未入力");
-      } else {
-        const grouped = groupItemsBySection(areaItems);
-        grouped.forEach((group) => {
-          lines.push(`- ${group.section}`);
-          group.items.forEach((item) => {
-            lines.push(
-              `  ・${item.title}: ${STATUS_LABELS[item.status]}${
-                item.note ? ` / 備考: ${item.note}` : ""
-              }`
-            );
-          });
-        });
-      }
-      lines.push("");
-    });
-
-    if (state.form.globalNotes) {
-      lines.push("■ 全体メモ");
-      lines.push(state.form.globalNotes);
-      lines.push("");
+    const headers = [
+      "点検日",
+      "点検者",
+      "施設所在地",
+      "点検箇所",
+      "箇所メモ",
+      "カテゴリ",
+      "点検項目",
+      "判定",
+      "備考",
+      "全体メモ",
+      "記録作成時刻",
+    ];
+    const csvRows = [headers.map(toCsvValue).join(",")];
+    if (!Array.isArray(items) || items.length === 0) {
+      return csvRows.join("\n");
     }
 
-    lines.push("以上、確認をお願いいたします。");
-    return lines.join("\n");
+    const groupedByArea = areaMap || groupItemsByArea(items);
+    const inspectionDate = formatDateForCsv(state.form.inspectionDate);
+    const inspectorName = state.form.inspectorName || "";
+    const facilityLocation = state.form.facilityLocation || "";
+    const globalNotes = state.form.globalNotes || "";
+    const generatedAt = formatDateTimeForCsv(new Date());
+
+    state.areas.forEach((area, index) => {
+      const areaItems = groupedByArea.get(area.id) || [];
+      if (areaItems.length === 0) {
+        return;
+      }
+      const areaName = area.name || `点検箇所${index + 1}`;
+      const areaNotes = area.notes || "";
+      areaItems.forEach((item) => {
+        const row = [
+          inspectionDate,
+          inspectorName,
+          facilityLocation,
+          areaName,
+          areaNotes,
+          item.section,
+          item.title,
+          STATUS_LABELS[item.status] || item.status,
+          item.note || "",
+          globalNotes,
+          generatedAt,
+        ];
+        csvRows.push(row.map(toCsvValue).join(","));
+      });
+    });
+
+    return csvRows.join("\n");
   }
 
   function applyChecklistConfiguration(sections, { persist } = { persist: true }) {
